@@ -32,6 +32,10 @@ bool intersects(Line l1, Line l2) {
     if (ccw(l2.p1, l2.p2, l1.p1)*ccw(l2.p1, l2.p2, l1.p2) > 0) return false;
     return true;
 }
+Vector2f projectPointToLine(Vector2f point, Line line) {
+    Vector2f v = line.vec();
+    return line.p1 + (point-line.p1).dot(v)*v;
+}
 
 class Scene {
     public:
@@ -78,7 +82,7 @@ class Scene {
 
             while(1) {
                 Vector2f n = l.normal();
-                img[3*(x0 + w*y0)] = lightPixel(clip2world(x0, y0, w, h), n);
+                img[3*(x0 + w*y0)] = lightPixel(projectPointToLine(clip2world(x0, y0, w, h),l), n);
                 img[3*(x0 + w*y0)+1] = n[0];
                 img[3*(x0 + w*y0)+2] = n[1];
                 if (x0==x1 && y0==y1) break;
@@ -128,8 +132,8 @@ class Scene {
     protected:
         Vector2f clip2world(int x, int y, int w, int h) {
             Vector2f v = maxp - minp;
-            v[0] *= (x+1)/((float)w-2);
-            v[1] *= (y+1)/((float)h-2);
+            v[0] *= (x+1.5)/((float)w-2);
+            v[1] *= (y+1.5)/((float)h-2);
             return v + minp;
         }
         void world2clip(Vector2f p, int& x, int& y, int w, int h) {
