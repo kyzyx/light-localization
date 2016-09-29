@@ -14,8 +14,11 @@ class Line {
         Vector2f p1;
         Vector2f p2;
 
+        Vector2f vec() const {
+            return (p2-p1).normalized();
+        }
         Vector2f normal() const {
-            Vector2f v = (p1-p2).normalized();
+            Vector2f v = (p2-p1).normalized();
             return Vector2f(v[1], -v[0]);
         }
 };
@@ -45,7 +48,7 @@ class Scene {
                 Vector2f L = lights[i].head(2) - p;
                 Vector2f p2 = p + L.normalized()*0.0001;
                 if (L.squaredNorm() == 0) continue;
-                ret += L.normalized().dot(n)*lights[i][2]/L.squaredNorm();
+                ret += fabs(L.normalized().dot(n))*lights[i][2]/L.squaredNorm();
                 //if (!intersectsAny(Line(p2, lights[i].head(2)))) {
                     //ret += lights[i][2]/L.squaredNorm();
                     ////cout << i << " " << lights[i][2] << " " << p[0] << " " << p[1] << " " << L[0] << " " << L[1] << " " << L.squaredNorm() << " " << ret << endl;
@@ -74,8 +77,10 @@ class Scene {
             int e2;
 
             while(1) {
-                // FIXME: Use actual line point
-                img[x0 + w*y0] = lightPixel(clip2world(x0, y0, w, h), l.normal());
+                Vector2f n = l.normal();
+                img[3*(x0 + w*y0)] = lightPixel(clip2world(x0, y0, w, h), n);
+                img[3*(x0 + w*y0)+1] = n[0];
+                img[3*(x0 + w*y0)+2] = n[1];
                 if (x0==x1 && y0==y1) break;
                 e2 = err;
                 if (e2 >-dx) { err -= dy; x0 += sx; }
@@ -84,7 +89,7 @@ class Scene {
         }
 
         void render(float* img, int w, int h) {
-            memset(img, 0, w*h*sizeof(float));
+            memset(img, 0, 3*w*h*sizeof(float));
             for (int i = 0; i < scene.size(); i++) {
                 traceLine(img, w, h, scene[i]);
             }
@@ -95,19 +100,21 @@ class Scene {
             float d = fmax(bounds[0]/(w-2), bounds[1]/(h-2));
             for (int i = 0; i < w*h; i++) field[i] = 1e7;
             for (int i = 0; i < w*h; i++) {
-                if (v[i] > 0) field[i] = -1;
+                if (v[3*i] > 0) field[i] = -1;
                 else continue;
                 Vector2f p = clip2world(i%w,i/w,w,h);
                 for (int j = 0; j < w*h; j++) {
-                    if (v[j] > 0) continue;
+                    if (v[3*j] > 0) continue;
                     Vector2f p2 = clip2world(j%w,j/w,w,h);
                     Vector2f L = p2 - p;
                     Vector2f Ln = L.normalized();
                     Line l(p,p2);
                     l.p1 += Ln*d;
                     l.p2 -= Ln*d;
+                    Vector2f n(v[3*i+1], v[3*i+2]);
                     //if (intersectsAny(l)) continue;
-                    field[j] = min(field[j], v[i]*L.squaredNorm()); // FIXME: / line.normal().dot(Ln)
+                    if (fabs(n.dot(Ln)) < 1e-9) continue;
+                    field[j] = min(field[j], v[3*i]*L.squaredNorm()/fabs(n.dot(Ln)));
                 }
             }
             for (int i = 0; i < lights.size(); i++) {
@@ -143,7 +150,7 @@ class Scene {
 };
 
 
-void saveFile(char* filename, float* img, int w, int h) {
+void saveFile(const char* filename, float* img, int w, int h, int ch=1) {
     int m = 65535;
     ofstream out(filename);
     out << "P3 " << w << " " << h << " " << m << endl;
@@ -151,16 +158,16 @@ void saveFile(char* filename, float* img, int w, int h) {
     for (int y = h-1; y >= 0; y--) {
         for (int x = 0; x < w; x++) {
             int idx = x+y*w;
-            if (img[idx] < 0) {
-                if (img[idx] < -1) {
-                    out << (int) -l*img[idx] << " 0 0 ";
+            if (img[ch*idx] < 0) {
+                if (img[ch*idx] < -1) {
+                    out << (int) -l*img[ch*idx] << " 0 0 ";
                 } else {
-                    out << "0 0 " << (int) -l*img[idx] << " ";
+                    out << "0 0 " << (int) -l*img[ch*idx] << " ";
                 }
-            } else if (l*img[idx] >= m) {
+            } else if (l*img[ch*idx] >= m) {
                 out << "0 " <<  l << " 0 ";
             } else {
-                out << (int) (l*img[idx]) << " " << (int) (l*img[idx]) << " " << (int) (l*img[idx]) << " ";
+                out << (int) (l*img[ch*idx]) << " " << (int) (l*img[ch*idx]) << " " << (int) (l*img[ch*idx]) << " ";
             }
         }
         out << endl;
@@ -192,15 +199,9 @@ int main(int argc, char** argv) {
     // Render scene
     int w = atoi(argv[1]);
     int h = atoi(argv[2]);
-    float* img = new float[w*h];
+    float* img = new float[3*w*h];
     s.render(img, w, h);
-    if (argc > 3) saveFile("img.ppm", img, w, h);
-    //for (int i = 0; i < h; i++) {
-        //for (int j = 0; j < w; j++) {
-            //cout << img[i*w+j] << " ";
-        //}
-        //cout << endl;
-    //}
+    if (argc > 3) saveFile("img.ppm", img, w, h, 3);
 
     // Compute field
     float* field = new float[w*h];
