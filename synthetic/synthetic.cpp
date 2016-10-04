@@ -128,7 +128,7 @@ void writePlyMesh(R3Mesh& m, const string& filename, vector<double> customcolors
 
 int main(int argc, char** argv) {
     if (argc < 3) {
-        cout << "Usage: synthetic input.ply lights.txt [output.ply] > output.m" << endl;
+        cout << "Usage: gensynthetic input.ply lights.txt [output.ply [coefs.txt]] > output.m" << endl;
         return 0;
     }
     R3Mesh mesh;
@@ -148,18 +148,31 @@ int main(int argc, char** argv) {
         lights.push_back(l);
     }
 
+    vector<double> coefs(lights.size(),1);
+    if (argc > 4) {
+        ifstream coin(argv[4]);
+        for (int i = 0; i < lights.size(); i++) {
+            coin >> coefs[i];
+        }
+    }
     vector<double> colors(mesh.NVertices());
+    cout << "A = [" << endl;
     for (int i = 0; i < mesh.NVertices(); i++) {
+        if (i) cout << ";" << endl;
         double radiance = 0;
         for (int j = 0; j < lights.size(); j++) {
+            if (j) cout << ", ";
             R3MeshVertex* v = mesh.Vertex(i);
+            double l = 0;
             if (visible(mesh, mesh.VertexPosition(v), lights[j]->position)) {
-                radiance += lights[j]->L(mesh.VertexPosition(v), mesh.VertexNormal(v));
+                l = lights[j]->L(mesh.VertexPosition(v), mesh.VertexNormal(v));
+                radiance += coefs[j]*l;
             }
+            cout << l;
         }
         colors[i] = radiance;
-        cout << radiance << endl;
     }
+    cout << "];" << endl;
     if (argc > 3) {
         writePlyMesh(mesh, argv[3], colors);
     }
