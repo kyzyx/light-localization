@@ -3,3 +3,7 @@ genbasis
 
 *.o
 .*.swp
+
+*.ply
+*.txt
+*.m

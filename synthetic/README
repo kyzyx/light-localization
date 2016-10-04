@@ -13,6 +13,6 @@ Need a mesh file (mesh.ply) and lighting on that file (lit.m)
 
     $ ./genbasis mesh.ply 0.05 1 > basis.txt
     $ ./gensynthetic mesh.ply basis.txt > basis.m
-    $ ./solvesbl.m lit.m basis.m output.txt
+    $ ./solvesbl lit.m basis.m output.txt
     $ python ../pyvis/vis.py lit.ply output.txt 0.05
 
