@@ -1,2 +1,4 @@
 flatland
 *.o
+*.ppm
+*.lt
