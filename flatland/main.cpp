@@ -93,6 +93,16 @@ class Scene {
             }
         }
 
+        void initCuda(int w, int h) {
+            cm.w = w;
+            cm.h = h;
+            cm.maxx = maxp[0];
+            cm.maxy = maxp[1];
+            cm.minx = minp[0];
+            cm.miny = minp[1];
+            cm.n = surfels.size()/4;
+            Cudamap_init(&cm, surfels.data());
+        }
         void render(float* img, int w, int h) {
             memset(img, 0, 3*w*h*sizeof(float));
             for (int i = 0; i < scene.size(); i++) {
@@ -102,7 +112,6 @@ class Scene {
 
         void computeFieldCuda(float* v, float* field, int w, int h) {
             vector<float> intensities;
-            vector<float> surfels;
             for (int i = 0; i < w*h; i++) {
                 if (v[3*i] > 0) {
                     intensities.push_back(v[3*i]);
@@ -113,7 +122,11 @@ class Scene {
                     surfels.push_back(v[3*i+2]);
                 }
             }
-            computemap_cuda(intensities.data(), surfels.data(), intensities.size(), field, w, h, maxp[0], maxp[1], minp[0], minp[1]);
+            initCuda(w,h);
+            Cudamap_setIntensities(&cm, intensities.data());
+            Cudamap_compute(&cm, field);
+            Cudamap_free(&cm);
+
             for (int i = 0; i < w*h; i++) {
                 if (v[3*i] > 0) field[i] = -1;
             }
@@ -175,6 +188,11 @@ class Scene {
         }
         Vector2f minp, maxp;
         vector<Line> scene;
+
+        // Intermediates
+        Cudamap cm;
+        vector<float> surfels;
+        vector<int> coords;
 };
 
 

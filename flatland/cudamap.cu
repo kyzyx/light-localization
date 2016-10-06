@@ -72,42 +72,49 @@ __global__ void cuCompute(
     }
 }
 
-void computemap_cuda(
-        float* intensities,
-        float* surfels,
-        int n,
-        float* field,
-        int w, int h,
-        float maxx, float maxy, float minx, float miny
-        )
+void Cudamap_init(Cudamap* cudamap, float* surfels) {
+    cudaMalloc((void**) &(cudamap->d_intensities), sizeof(float)*cudamap->n);
+    cudaMalloc((void**) &(cudamap->d_surfels), sizeof(float4)*cudamap->n);
+    cudaMalloc((void**) &(cudamap->d_field), sizeof(float)*cudamap->w*cudamap->h);
+
+    cudaMemcpy(cudamap->d_surfels, surfels, sizeof(float4)*cudamap->n, cudaMemcpyHostToDevice);
+    cudaMemset((void*) cudamap->d_intensities, 0, sizeof(float)*cudamap->n);
+}
+
+void Cudamap_free(Cudamap* cudamap) {
+    cudaFree(cudamap->d_surfels);
+    cudaFree(cudamap->d_intensities);
+    cudaFree(cudamap->d_field);
+}
+
+void Cudamap_setIntensities(Cudamap* cudamap, float* intensities) {
+    if (intensities) {
+        cudaMemcpy(cudamap->d_intensities, intensities, sizeof(float)*cudamap->n, cudaMemcpyHostToDevice);
+    } else {
+        cudaMemset((void*) cudamap->d_intensities, 0, sizeof(float)*cudamap->n);
+    }
+}
+
+void Cudamap_compute(Cudamap* cudamap, float* field)
 {
-    float* d_intensities;
-    float4* d_surfels;
-    float* d_field;
+    int n = cudamap->n;
+    int w = cudamap->w;
+    int h = cudamap->h;
 
-    cudaMalloc((void**) &d_intensities, sizeof(float)*n);
-    cudaMalloc((void**) &d_surfels, sizeof(float4)*n);
-    cudaMalloc((void**) &d_field, sizeof(float)*w*h);
-
-    cudaMemcpy(d_intensities, intensities, sizeof(float)*n, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_surfels, surfels, sizeof(float4)*n, cudaMemcpyHostToDevice);
     for (int i = 0; i < w*h; i++) field[i] = MAX_FLOAT;
-    cudaMemcpy(d_field, field, sizeof(float)*w*h, cudaMemcpyHostToDevice);
+    cudaMemcpy(cudamap->d_field, field, sizeof(float)*w*h, cudaMemcpyHostToDevice);
 
     dim3 threads(BLOCK_SIZE, 1, 1);
     dim3 blocks((n+BLOCK_SIZE-1)/BLOCK_SIZE, w, h);
 
     cuCompute<BLOCK_SIZE><<< blocks, threads >>>(
-            d_intensities,
-            d_surfels,
+            cudamap->d_intensities,
+            cudamap->d_surfels,
             n,
-            d_field,
+            cudamap->d_field,
             w, h,
-            maxx, maxy, minx, miny
+            cudamap->maxx, cudamap->maxy, cudamap->minx, cudamap->miny
             );
 
-    cudaMemcpy(field, d_field, sizeof(float)*w*h, cudaMemcpyDeviceToHost);
-    cudaFree(d_intensities);
-    cudaFree(d_surfels);
-    cudaFree(d_field);
+    cudaMemcpy(field, cudamap->d_field, sizeof(float)*w*h, cudaMemcpyDeviceToHost);
 }
