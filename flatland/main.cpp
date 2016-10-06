@@ -71,7 +71,7 @@ class Scene {
             return 0;
         }
 
-        void traceLine(float* img, int w, int h, Line l) {
+        void traceLine(int w, int h, Line l) {
             int x0, y0, x1, y1;
             world2clip(l.p1, x0, y0, w, h);
             world2clip(l.p2, x1, y1, w, h);
@@ -83,9 +83,14 @@ class Scene {
 
             while(1) {
                 Vector2f n = l.normal();
-                img[3*(x0 + w*y0)] = lightPixel(projectPointToLine(clip2world(x0, y0, w, h),l), n);
-                img[3*(x0 + w*y0)+1] = n[0];
-                img[3*(x0 + w*y0)+2] = n[1];
+                Vector2f p = projectPointToLine(clip2world(x0, y0, w, h),l);
+                coords.push_back(x0);
+                coords.push_back(y0);
+                surfels.push_back(p[0]);
+                surfels.push_back(p[1]);
+                surfels.push_back(n[0]);
+                surfels.push_back(n[1]);
+                intensities.push_back(0);
                 if (x0==x1 && y0==y1) break;
                 e2 = err;
                 if (e2 >-dx) { err -= dy; x0 += sx; }
@@ -103,25 +108,27 @@ class Scene {
             cm.n = surfels.size()/4;
             Cudamap_init(&cm, surfels.data());
         }
-        void render(float* img, int w, int h) {
+        void lightScene(float* img, int w, int h) {
             memset(img, 0, 3*w*h*sizeof(float));
+            for (int i = 0; i < intensities.size(); i++) {
+                int x = coords[2*i];
+                int y = coords[2*i+1];
+                Vector2f p(surfels[4*i+0], surfels[4*i+1]);
+                Vector2f n(surfels[4*i+2], surfels[4*i+3]);
+                intensities[i] = lightPixel(p, n);
+                img[3*(x + w*y)] = intensities[i];
+                img[3*(x + w*y)+1] = n[0];
+                img[3*(x + w*y)+2] = n[1];
+            }
+        }
+
+        void render(int w, int h) {
             for (int i = 0; i < scene.size(); i++) {
-                traceLine(img, w, h, scene[i]);
+                traceLine(w, h, scene[i]);
             }
         }
 
         void computeFieldCuda(float* v, float* field, int w, int h) {
-            vector<float> intensities;
-            for (int i = 0; i < w*h; i++) {
-                if (v[3*i] > 0) {
-                    intensities.push_back(v[3*i]);
-                    Vector2f p = clip2world(i%w,i/w,w,h);
-                    surfels.push_back(p[0]);
-                    surfels.push_back(p[1]);
-                    surfels.push_back(v[3*i+1]);
-                    surfels.push_back(v[3*i+2]);
-                }
-            }
             initCuda(w,h);
             Cudamap_setIntensities(&cm, intensities.data());
             Cudamap_compute(&cm, field);
@@ -193,6 +200,7 @@ class Scene {
         Cudamap cm;
         vector<float> surfels;
         vector<int> coords;
+        vector<float> intensities;
 };
 
 
@@ -246,7 +254,8 @@ int main(int argc, char** argv) {
     int w = atoi(argv[1]);
     int h = atoi(argv[2]);
     float* img = new float[3*w*h];
-    s.render(img, w, h);
+    s.render(w, h);
+    s.lightScene(img, w, h);
     if (argc > 3) saveFile("img.ppm", img, w, h, 3);
 
     // Compute field
