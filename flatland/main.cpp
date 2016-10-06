@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <Eigen/Eigen>
+#include "cudamap.h"
 
 using namespace std;
 using namespace Eigen;
@@ -99,6 +100,33 @@ class Scene {
             }
         }
 
+        void computeFieldCuda(float* v, float* field, int w, int h) {
+            vector<surfel> surfels;
+            for (int i = 0; i < w*h; i++) {
+                if (v[3*i] > 0) {
+                    surfel s;
+                    s.intensity = v[3*i];
+                    s.pixcoords[0] = i%w;
+                    s.pixcoords[1] = i/w;
+                    Vector2f p = clip2world(i%w,i/w,w,h);
+                    s.coords[0] = p[0];
+                    s.coords[1] = p[1];
+                    s.normal[0] = v[3*i+1];
+                    s.normal[1] = v[3*i+2];
+
+                    surfels.push_back(s);
+                }
+            }
+            computemap_cuda(surfels.data(), surfels.size(), field, w, h, maxp[0], maxp[1], minp[0], minp[1]);
+            for (int i = 0; i < w*h; i++) {
+                if (v[3*i] > 0) field[i] = -1;
+            }
+            for (int i = 0; i < lights.size(); i++) {
+                int x, y;
+                world2clip(lights[i].head(2), x, y, w, h);
+                field[x+y*w] = -2;
+            }
+        }
         void computeField(float* v, float* field, int w, int h) {
             Vector2f bounds = maxp - minp;
             float d = fmax(bounds[0]/(w-2), bounds[1]/(h-2));
@@ -117,8 +145,8 @@ class Scene {
                     l.p2 -= Ln*d;
                     Vector2f n(v[3*i+1], v[3*i+2]);
                     //if (intersectsAny(l)) continue;
-                    if (fabs(n.dot(Ln)) < 1e-9) continue;
-                    field[j] = min(field[j], v[3*i]*L.squaredNorm()/fabs(n.dot(Ln)));
+                    if (n.dot(Ln) < 1e-9) continue;
+                    field[j] = min(field[j], v[3*i]*L.squaredNorm()/n.dot(Ln));
                 }
             }
             for (int i = 0; i < lights.size(); i++) {
@@ -180,7 +208,7 @@ void saveFile(const char* filename, float* img, int w, int h, int ch=1) {
 
 int main(int argc, char** argv) {
     if (argc < 3) {
-        cout << "Usage: flatland width height [filename]" << endl;
+        cout << "Usage: flatland width height filename [-cuda]" << endl;
         return 0;
     }
     Scene s;
@@ -209,6 +237,10 @@ int main(int argc, char** argv) {
 
     // Compute field
     float* field = new float[w*h];
-    s.computeField(img, field, w, h);
+    if (argc > 4 && strcmp(argv[4], "-cuda") == 0) {
+        s.computeFieldCuda(img, field, w, h);
+    } else {
+        s.computeField(img, field, w, h);
+    }
     if (argc > 3) saveFile(argv[3], field, w, h);
 }
