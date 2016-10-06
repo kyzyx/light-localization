@@ -20,14 +20,14 @@ __device__ static float atomicMin(float* address, float val)
 
 template <unsigned int blockSize>
 __global__ void cuCompute(
-        surfel* surfels,
+        float* intensities,
+        float4* surfels,
         int n,
         float* field,
         int w, int h,
         float maxx, float maxy, float minx, float miny
         )
 {
-    surfel s;
     __shared__ float mini[BLOCK_SIZE];
 
     int tid = threadIdx.x;
@@ -37,23 +37,21 @@ __global__ void cuCompute(
     int pointIdx = blockIdx.z*w+blockIdx.y;
     mini[tid] = MAX_FLOAT;
 
-    // Data load
-    s.intensity = surfels[surfaceIdx].intensity;
-    s.coords[0] = surfels[surfaceIdx].coords[0];
-    s.coords[1] = surfels[surfaceIdx].coords[1];
-    s.normal[0] = surfels[surfaceIdx].normal[0];
-    s.normal[1] = surfels[surfaceIdx].normal[1];
-    // Computation
     if (surfaceIdx < n) {
-        float Lx = x - s.coords[0];
-        float Ly = y - s.coords[1];
-        float ndotL = s.normal[0]*Lx + s.normal[1]*Ly;
+        // Data load
+        float intensity = intensities[surfaceIdx];
+        float4 surfel = surfels[surfaceIdx];
+
+        // Computation
+        float Lx = x - surfel.x;
+        float Ly = y - surfel.y;
+        float ndotL = surfel.z*Lx + surfel.w*Ly;
         float LdotL = Lx*Lx + Ly*Ly;
         float mag = sqrt(LdotL);
         Lx /= mag;
         Ly /= mag;
-        float ndotLn = s.normal[0]*Lx + s.normal[1]*Ly;
-        mini[tid] = ndotL>1e-9?s.intensity*LdotL/ndotLn:MAX_FLOAT;
+        float ndotLn = surfel.z*Lx + surfel.w*Ly;
+        mini[tid] = ndotL>1e-9?intensity*LdotL/ndotLn:MAX_FLOAT;
     }
     __syncthreads();
 
@@ -75,20 +73,24 @@ __global__ void cuCompute(
 }
 
 void computemap_cuda(
-        surfel* surfels,
+        float* intensities,
+        float* surfels,
         int n,
         float* field,
         int w, int h,
         float maxx, float maxy, float minx, float miny
         )
 {
-    surfel* d_surfels;
+    float* d_intensities;
+    float4* d_surfels;
     float* d_field;
 
-    cudaMalloc((void**) &d_surfels, sizeof(surfel)*n);
+    cudaMalloc((void**) &d_intensities, sizeof(float)*n);
+    cudaMalloc((void**) &d_surfels, sizeof(float4)*n);
     cudaMalloc((void**) &d_field, sizeof(float)*w*h);
 
-    cudaMemcpy(d_surfels, surfels, sizeof(surfel)*n, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_intensities, intensities, sizeof(float)*n, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_surfels, surfels, sizeof(float4)*n, cudaMemcpyHostToDevice);
     for (int i = 0; i < w*h; i++) field[i] = MAX_FLOAT;
     cudaMemcpy(d_field, field, sizeof(float)*w*h, cudaMemcpyHostToDevice);
 
@@ -96,6 +98,7 @@ void computemap_cuda(
     dim3 blocks((n+BLOCK_SIZE-1)/BLOCK_SIZE, w, h);
 
     cuCompute<BLOCK_SIZE><<< blocks, threads >>>(
+            d_intensities,
             d_surfels,
             n,
             d_field,
@@ -104,6 +107,7 @@ void computemap_cuda(
             );
 
     cudaMemcpy(field, d_field, sizeof(float)*w*h, cudaMemcpyDeviceToHost);
+    cudaFree(d_intensities);
     cudaFree(d_surfels);
     cudaFree(d_field);
 }

@@ -101,23 +101,19 @@ class Scene {
         }
 
         void computeFieldCuda(float* v, float* field, int w, int h) {
-            vector<surfel> surfels;
+            vector<float> intensities;
+            vector<float> surfels;
             for (int i = 0; i < w*h; i++) {
                 if (v[3*i] > 0) {
-                    surfel s;
-                    s.intensity = v[3*i];
-                    s.pixcoords[0] = i%w;
-                    s.pixcoords[1] = i/w;
+                    intensities.push_back(v[3*i]);
                     Vector2f p = clip2world(i%w,i/w,w,h);
-                    s.coords[0] = p[0];
-                    s.coords[1] = p[1];
-                    s.normal[0] = v[3*i+1];
-                    s.normal[1] = v[3*i+2];
-
-                    surfels.push_back(s);
+                    surfels.push_back(p[0]);
+                    surfels.push_back(p[1]);
+                    surfels.push_back(v[3*i+1]);
+                    surfels.push_back(v[3*i+2]);
                 }
             }
-            computemap_cuda(surfels.data(), surfels.size(), field, w, h, maxp[0], maxp[1], minp[0], minp[1]);
+            computemap_cuda(intensities.data(), surfels.data(), intensities.size(), field, w, h, maxp[0], maxp[1], minp[0], minp[1]);
             for (int i = 0; i < w*h; i++) {
                 if (v[3*i] > 0) field[i] = -1;
             }
