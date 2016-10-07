@@ -18,6 +18,24 @@ __device__ static float atomicMin(float* address, float val)
     return __int_as_float(old);
 }
 
+__global__ void cuAddlight(float* intensities, float4* surfels, float intensity, float x, float y, int n)
+{
+    int tid = threadIdx.x;
+    int surfaceIdx = tid + blockDim.x*blockIdx.x;
+    if (surfaceIdx < n) {
+        float4 surfel = surfels[surfaceIdx];
+
+        float2 L;
+        L.x = x - surfel.x;
+        L.y = y - surfel.y;
+
+        float LdotL = L.x*L.x+L.y*L.y;
+        float ndotL = fmaxf(surfel.z*L.x+surfel.w*L.y,0.f);
+        float ret = LdotL>0?ndotL*intensity/(LdotL*sqrt(LdotL)):0;
+        atomicAdd(intensities+surfaceIdx, ret);
+    }
+}
+
 template <unsigned int blockSize>
 __global__ void cuCompute(
         float* intensities,
@@ -93,6 +111,11 @@ void Cudamap_setIntensities(Cudamap* cudamap, float* intensities) {
     } else {
         cudaMemset((void*) cudamap->d_intensities, 0, sizeof(float)*cudamap->n);
     }
+}
+
+void Cudamap_addLight(Cudamap* cudamap, float intensity, float x, float y) {
+    cuAddlight<<< (cudamap->n+BLOCK_SIZE-1)/BLOCK_SIZE, BLOCK_SIZE >>>(
+            cudamap->d_intensities, cudamap->d_surfels, intensity, x, y, cudamap->n);
 }
 
 void Cudamap_compute(Cudamap* cudamap, float* field)

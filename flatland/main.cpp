@@ -108,6 +108,12 @@ class Scene {
             cm.n = surfels.size()/4;
             Cudamap_init(&cm, surfels.data());
         }
+        void lightSceneCuda(float* img, int w, int h) {
+            for (int i = 0; i < lights.size(); i++) {
+                Cudamap_addLight(&cm, lights[i][2], lights[i][0], lights[i][1]);
+            }
+        }
+
         void lightScene(float* img, int w, int h) {
             memset(img, 0, 3*w*h*sizeof(float));
             for (int i = 0; i < intensities.size(); i++) {
@@ -129,8 +135,6 @@ class Scene {
         }
 
         void computeFieldCuda(float* v, float* field, int w, int h) {
-            initCuda(w,h);
-            Cudamap_setIntensities(&cm, intensities.data());
             Cudamap_compute(&cm, field);
             Cudamap_free(&cm);
 
@@ -255,15 +259,19 @@ int main(int argc, char** argv) {
     int h = atoi(argv[2]);
     float* img = new float[3*w*h];
     s.render(w, h);
-    s.lightScene(img, w, h);
-    if (argc > 3) saveFile("img.ppm", img, w, h, 3);
-
-    // Compute field
     float* field = new float[w*h];
     if (argc > 4 && strcmp(argv[4], "-cuda") == 0) {
+        s.initCuda(w,h);
+        s.lightSceneCuda(img, w, h);
+        s.lightScene(img, w, h);
+        // Compute field
         s.computeFieldCuda(img, field, w, h);
     } else {
+        s.lightScene(img, w, h);
+        if (argc > 3) saveFile("img.ppm", img, w, h, 3);
+        // Compute field
         s.computeField(img, field, w, h);
     }
+
     if (argc > 3) saveFile(argv[3], field, w, h);
 }
