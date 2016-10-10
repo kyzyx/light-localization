@@ -84,26 +84,67 @@ class Scene {
         Vector3f getLight(int idx) const {
             return lights[idx];
         }
+        void addLightWithSymmetry(float intensity, int i) {
+            Cudamap_addLight(&cm, intensity, lights[i][0], lights[i][1]);
+            if (symmetries[i] & 1) {
+                Cudamap_addLight(&cm, intensity, -lights[i][0], lights[i][1]);
+            }
+            if (symmetries[i] & 2) {
+                Cudamap_addLight(&cm, intensity, lights[i][0], -lights[i][1]);
+            }
+            if (symmetries[i] & 4) {
+                Cudamap_addLight(&cm, intensity, -lights[i][0], -lights[i][1]);
+            }
+        }
         void changeIntensity(int i, float intensity) {
-            Cudamap_addLight(&cm, intensity - lights[i][2], lights[i][0], lights[i][1]);
+            addLightWithSymmetry(intensity-lights[i][2], i);
             lights[i][2] = intensity;
             //computeField();
         }
         void moveLight(float x, float y, int i) {
-            Cudamap_addLight(&cm, -lights[i][2], lights[i][0], lights[i][1]);
+            addLightWithSymmetry(-lights[i][2], i);
             lights[i][0] = x;
             lights[i][1] = y;
-            Cudamap_addLight(&cm, lights[i][2], lights[i][0], lights[i][1]);
+            addLightWithSymmetry(lights[i][2], i);
             //computeField();
         }
         void deleteLight(int i) {
-            Cudamap_addLight(&cm, -lights[i][2], lights[i][0], lights[i][1]);
+            addLightWithSymmetry(-lights[i][2], i);
             lights.erase(lights.begin()+i);
+            symmetries.erase(symmetries.begin()+i);
             //computeField();
+        }
+        void addSymmetry(int i, int symm) {
+            int newsym = symm - (symm & symmetries[i]);
+            int oldsym = symm & symmetries[i];
+            if (newsym & 1) {
+                Cudamap_addLight(&cm, lights[i][2], -lights[i][0], lights[i][1]);
+            }
+            if (newsym & 2) {
+                Cudamap_addLight(&cm, lights[i][2], lights[i][0], -lights[i][1]);
+            }
+            if (newsym & 4) {
+                Cudamap_addLight(&cm, lights[i][2], -lights[i][0], -lights[i][1]);
+            }
+            if (oldsym & 1) {
+                Cudamap_addLight(&cm, -lights[i][2], -lights[i][0], lights[i][1]);
+            }
+            if (oldsym & 2) {
+                Cudamap_addLight(&cm, -lights[i][2], lights[i][0], -lights[i][1]);
+            }
+            if (oldsym & 4) {
+                Cudamap_addLight(&cm, -lights[i][2], -lights[i][0], -lights[i][1]);
+            }
+            symmetries[i] |= newsym;
+            symmetries[i] -= oldsym;
+        }
+        int getSymmetries(int i) const {
+            return symmetries[i];
         }
         void addLight(float x, float y, float intensity=1) {
             Cudamap_addLight(&cm, intensity, x, y);
             lights.push_back(Vector3f(x,y,intensity));
+            symmetries.push_back(0);
             //computeField();
         }
         void computeField() {
@@ -133,6 +174,7 @@ class Scene {
         Vector2f minp, maxp;
         vector<Line> lines;
         vector<Vector3f> lights;
+        vector<int> symmetries;
 
         Cudamap cm;
         float* field;
@@ -187,11 +229,37 @@ void rerasterizeLights() {
     memset(auxlayer, 0, width*height*displayscale*displayscale*sizeof(float));
     int ix, iy;
     for (int i = 0; i < s.numLights(); i++) {
-        s.world2clip(s.getLight(i).head(2), ix, iy, width*displayscale, height*displayscale);
+        Vector2f p = s.getLight(i).head(2);
+        s.world2clip(p, ix, iy, width*displayscale, height*displayscale);
         if (selectedlight == i) {
             rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 1.f);
         } else {
             rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.4f);
+        }
+
+        if (s.getSymmetries(i) & 1) {
+            s.world2clip(Vector2f(-p[0], p[1]), ix, iy, width*displayscale, height*displayscale);
+            if (selectedlight == i) {
+                rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.6f);
+            } else {
+                rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.1f);
+            }
+        }
+        if (s.getSymmetries(i) & 2) {
+            s.world2clip(Vector2f(p[0], -p[1]), ix, iy, width*displayscale, height*displayscale);
+            if (selectedlight == i) {
+                rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.6f);
+            } else {
+                rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.1f);
+            }
+        }
+        if (s.getSymmetries(i) & 4) {
+            s.world2clip(Vector2f(-p[0], -p[1]), ix, iy, width*displayscale, height*displayscale);
+            if (selectedlight == i) {
+                rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.6f);
+            } else {
+                rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.1f);
+            }
         }
     }
     glBindTexture(GL_TEXTURE_2D, auxtex);
@@ -210,16 +278,6 @@ void selectLight(int i) {
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width*displayscale, height*displayscale, GL_RED, GL_FLOAT, auxlayer);
     glBindTexture(GL_TEXTURE_2D, 0);
     selectedlight = i;
-}
-
-void doAddLight(float x, float y) {
-    s.addLight(x,y);
-    int ix, iy;
-    s.world2clip(Vector2f(x,y), ix, iy, width*displayscale, height*displayscale);
-    rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS);
-    glBindTexture(GL_TEXTURE_2D, auxtex);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width*displayscale, height*displayscale, GL_RED, GL_FLOAT, auxlayer);
-    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void keydown(unsigned char key, int x, int y) {
@@ -241,6 +299,15 @@ void keydown(unsigned char key, int x, int y) {
     } else if (key == ']' && selectedlight >= 0) {
         float intensity = s.getLight(selectedlight)[2];
         s.changeIntensity(selectedlight, intensity+0.1);
+    } else if (key == 'q' && selectedlight >= 0) {
+        s.addSymmetry(selectedlight, 1);
+        rerasterizeLights();
+    } else if (key == 'w' && selectedlight >= 0) {
+        s.addSymmetry(selectedlight, 2);
+        rerasterizeLights();
+    } else if (key == 'e' && selectedlight >= 0) {
+        s.addSymmetry(selectedlight, 4);
+        rerasterizeLights();
     } else if (key == 127 && selectedlight >= 0) {
         s.deleteLight(selectedlight);
         rerasterizeLights();
@@ -262,7 +329,8 @@ void click(int button, int state, int x, int y) {
             }
         }
         if (!clicked) {
-            doAddLight(p[0], p[1]);
+            s.addLight(p[0], p[1]);
+            rerasterizeLights();
             selectLight(s.numLights()-1);
         }
         dragging = 1;
@@ -378,17 +446,18 @@ int main(int argc, char** argv) {
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 
-    s.addSegment(Line(Vector2f(0, -0.01), Vector2f(0, 1.01)));
-    s.addSegment(Line(Vector2f(-0.01, 1), Vector2f(1.01, 1)));
-    s.addSegment(Line(Vector2f(1, 1.01), Vector2f(1, -0.01)));
-    s.addSegment(Line(Vector2f(1.01, 0), Vector2f(-0.01, 0)));
+    s.addSegment(Line(Vector2f(-1, -1.01), Vector2f(-1, 1.01)));
+    s.addSegment(Line(Vector2f(-1.01, 1), Vector2f(1.01, 1)));
+    s.addSegment(Line(Vector2f(1, 1.01), Vector2f(1, -1.01)));
+    s.addSegment(Line(Vector2f(1.01, -1), Vector2f(-1.01, -1)));
     s.rasterize(width, height);
 
     s.initCuda(width, height);
     s.setCudaGLTexture(tex);
     s.setCudaGLBuffer(pbo);
 
-    doAddLight(0.5, 0.5);
+    s.addLight(0,0);
+    rerasterizeLights();
 
     glutMainLoop();
 }
