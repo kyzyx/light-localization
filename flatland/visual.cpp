@@ -235,6 +235,12 @@ void keydown(unsigned char key, int x, int y) {
         float exposure;
         glGetUniformfv(progid, loc, &exposure);
         glUniform1f(loc, exposure+0.05);
+    } else if (key == '[' && selectedlight >= 0) {
+        float intensity = s.getLight(selectedlight)[2];
+        if (intensity > 0.1) s.changeIntensity(selectedlight, intensity-0.1);
+    } else if (key == ']' && selectedlight >= 0) {
+        float intensity = s.getLight(selectedlight)[2];
+        s.changeIntensity(selectedlight, intensity+0.1);
     } else if (key == 127 && selectedlight >= 0) {
         s.deleteLight(selectedlight);
         rerasterizeLights();
