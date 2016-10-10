@@ -204,25 +204,26 @@ void saveFile(const char* filename, float* img, int w, int h, int ch=1) {
 }
 
 int main(int argc, char** argv) {
-    if (argc < 3) {
-        cout << "Usage: flatland width height filename [-cuda]" << endl;
+    if (argc < 4) {
+        cout << "Usage: flatland width height filename infile [-cuda]" << endl;
         return 0;
     }
     Scene s;
+    ifstream in(argv[4]);
 
     // Read in scene
     int nsegs, nlights;
     double x,y,z;
-    cin >> nsegs >> nlights;
+    in >> nsegs >> nlights;
     for (int i = 0; i < nsegs; i++) {
-        cin >> x >> y;
+        in >> x >> y;
         Vector2f v1(x,y);
-        cin >> x >> y;
+        in >> x >> y;
         Vector2f v2(x,y);
         s.addSegment(Line(v1,v2));
     }
     for (int i = 0; i < nlights; i++) {
-        cin >> x >> y >> z;
+        in >> x >> y >> z;
         s.lights.push_back(Vector3f(x,y,z));
     }
     // Render scene
@@ -231,7 +232,7 @@ int main(int argc, char** argv) {
     float* img = new float[3*w*h];
     s.render(w, h);
     float* field = new float[w*h];
-    if (argc > 4 && strcmp(argv[4], "-cuda") == 0) {
+    if (argc > 5 && strcmp(argv[5], "-cuda") == 0) {
         s.initCuda(w,h);
         s.lightSceneCuda(img, w, h);
         s.lightScene(img, w, h);
