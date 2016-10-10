@@ -74,13 +74,37 @@ class Scene {
             Cudamap_setGLTexture(&cm, pbo);
         }
 
+        int numLights() const {
+            return lights.size();
+        }
+        Vector3f getLight(int idx) const {
+            return lights[idx];
+        }
+        void changeIntensity(int i, float intensity) {
+            Cudamap_addLight(&cm, intensity - lights[i][2], lights[i][0], lights[i][1]);
+            lights[i][2] = intensity;
+            computeField();
+        }
+        void moveLight(float x, float y, int i) {
+            Cudamap_addLight(&cm, -lights[i][2], lights[i][0], lights[i][1]);
+            lights[i][0] = x;
+            lights[i][1] = y;
+            Cudamap_addLight(&cm, lights[i][2], lights[i][0], lights[i][1]);
+            computeField();
+        }
+        void deleteLight(int i) {
+            Cudamap_addLight(&cm, -lights[i][2], lights[i][0], lights[i][1]);
+            lights.erase(lights.begin()+i);
+            computeField();
+        }
         void addLight(float x, float y, float intensity=1) {
             Cudamap_addLight(&cm, intensity, x, y);
+            lights.push_back(Vector3f(x,y,intensity));
+            computeField();
         }
         void computeField() {
             Cudamap_compute(&cm, field);
         }
-    protected:
         Vector2f clip2world(int x, int y, int w, int h) {
             Vector2f v = maxp - minp;
             v[0] *= (x+1.5)/((float)w-2);
@@ -94,6 +118,7 @@ class Scene {
             y = d[1]/v[1]*(h-2) + 1;
         }
 
+    protected:
         void extendBbox(Vector2f p) {
             minp[0] = min(minp[0], p[0]);
             minp[1] = min(minp[1], p[1]);
@@ -103,6 +128,7 @@ class Scene {
 
         Vector2f minp, maxp;
         vector<Line> lines;
+        vector<Vector3f> lights;
 
         Cudamap cm;
         float* field;
@@ -117,6 +143,51 @@ GLuint vao;
 GLuint vbo[2];
 GLuint pbo, tbo_tex, progid;
 
+int selectedlight = -1;
+int dragging = 0;
+Vector2f offset;
+
+void keydown(unsigned char key, int x, int y) {
+    if (key == ',') {
+        GLuint loc = glGetUniformLocation(progid, "exposure");
+        float exposure;
+        glGetUniformfv(progid, loc, &exposure);
+        if (exposure > 0.05)
+            glUniform1f(loc, exposure-0.05);
+    }
+    else if (key == '.') {
+        GLuint loc = glGetUniformLocation(progid, "exposure");
+        float exposure;
+        glGetUniformfv(progid, loc, &exposure);
+        glUniform1f(loc, exposure+0.05);
+    } else if (key == 127 && selectedlight >= 0) {
+        s.deleteLight(selectedlight);
+        selectedlight = -1;
+        dragging = 0;
+    }
+}
+
+const float RADIUS = 0.05;
+void click(int button, int state, int x, int y) {
+    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+        Vector2f p = s.clip2world(x,height-y,width,height);
+        selectedlight = -1;
+        for (int i = 0; i < s.numLights(); i++) {
+            if ((p-s.getLight(i).head(2)).squaredNorm() < RADIUS*RADIUS) {
+                selectedlight = i;
+                break;
+            }
+        }
+        if (selectedlight < 0) {
+            selectedlight = s.numLights();
+            s.addLight(p[0], p[1]);
+        }
+        dragging = 1;
+        offset = s.getLight(selectedlight).head(2) - p;
+    } else if (button == GLUT_LEFT_BUTTON && state == GLUT_UP) {
+        dragging = 0;
+    }
+}
 void draw() {
     glBindVertexArray(vao);
     glActiveTexture(GL_TEXTURE0);
@@ -135,6 +206,8 @@ void setupWindow(int argc, char** argv) {
     glutCreateWindow("Light Localization");
     glutDisplayFunc(draw);
     glutIdleFunc(draw);
+    glutKeyboardFunc(keydown);
+    glutMouseFunc(click);
     openglInit();
 }
 
@@ -199,7 +272,6 @@ int main(int argc, char** argv) {
     s.setCudaGLTexture(pbo);
 
     s.addLight(0.5, 0.5);
-    s.computeField();
 
     glutMainLoop();
 }
