@@ -1,6 +1,6 @@
 #include "cudamap.h"
+#include <cuda_gl_interop.h>
 #include <stdio.h>
-#include <cuda.h>
 
 #define BLOCK_SIZE 512
 #define MAX_FLOAT 1e4
@@ -91,12 +91,28 @@ __global__ void cuCompute(
 }
 
 void Cudamap_init(Cudamap* cudamap, float* surfels) {
+    cudaSetDevice(0);
+    cudaGLSetGLDevice(0);
     cudaMalloc((void**) &(cudamap->d_intensities), sizeof(float)*cudamap->n);
     cudaMalloc((void**) &(cudamap->d_surfels), sizeof(float4)*cudamap->n);
     cudaMalloc((void**) &(cudamap->d_field), sizeof(float)*cudamap->w*cudamap->h);
 
     cudaMemcpy(cudamap->d_surfels, surfels, sizeof(float4)*cudamap->n, cudaMemcpyHostToDevice);
     cudaMemset((void*) cudamap->d_intensities, 0, sizeof(float)*cudamap->n);
+}
+
+
+void Cudamap_setGLTexture(Cudamap* cudamap, unsigned int pbo) {
+    cudaStream_t cuda_stream;
+    cudaGraphicsResource *resources[1];
+    size_t size;
+
+    cudaGraphicsGLRegisterBuffer(resources, pbo, cudaGraphicsMapFlagsNone);
+    cudaStreamCreate(&cuda_stream);
+    cudaGraphicsMapResources(1, resources, cuda_stream);
+    cudaGraphicsResourceGetMappedPointer((void **)&(cudamap->d_field), &size, resources[0]);
+    cudaGraphicsUnmapResources(1, resources, cuda_stream);
+    cudaStreamDestroy(cuda_stream);
 }
 
 void Cudamap_free(Cudamap* cudamap) {

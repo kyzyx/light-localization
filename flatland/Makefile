@@ -1,5 +1,8 @@
 flatland: main.cpp cudamap.o
-	g++ main.cpp cudamap.o -lcudart -lcuda -o $@ -O3
+	g++ $^ -lcudart -lcuda -o $@ -O3
+
+visual: visual.cpp cudamap.o loadshader.o opengl_compat.o
+	g++ $^ -lcudart -lcuda -lGL -lGLU -lglut -lGLEW -o $@ -g
 
 cudamap.o: cudamap.h cudamap.cu
 	nvcc cudamap.cu -c -o $@

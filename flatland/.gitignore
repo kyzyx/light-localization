@@ -1,4 +1,5 @@
 flatland
+visual
 *.o
 *.ppm
 *.lt
