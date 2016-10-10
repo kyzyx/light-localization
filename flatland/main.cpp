@@ -1,42 +1,13 @@
 #include <iostream>
 #include <fstream>
 #include <Eigen/Eigen>
+#include "geometry.h"
 #include "cudamap.h"
 
 using namespace std;
 using namespace Eigen;
 
-class Line {
-    public:
-        Line()
-            : p1(Vector2f(0,0)), p2(Vector2f(0,0)) {}
-        Line(Vector2f a, Vector2f b)
-            : p1(a), p2(b) {}
-        Vector2f p1;
-        Vector2f p2;
-
-        Vector2f vec() const {
-            return (p2-p1).normalized();
-        }
-        Vector2f normal() const {
-            Vector2f v = (p2-p1).normalized();
-            return Vector2f(v[1], -v[0]);
-        }
-};
-
 float EPSILON = 1e-5;
-float ccw(Vector2f a, Vector2f b, Vector2f c) {
-    return (b[0] - a[0])*(c[1] - a[1]) - (c[0] - a[0])*(b[1] - a[1]);
-}
-bool intersects(Line l1, Line l2) {
-    if (ccw(l1.p1, l1.p2, l2.p1)*ccw(l1.p1, l1.p2, l2.p2) > 0) return false;
-    if (ccw(l2.p1, l2.p2, l1.p1)*ccw(l2.p1, l2.p2, l1.p2) > 0) return false;
-    return true;
-}
-Vector2f projectPointToLine(Vector2f point, Line line) {
-    Vector2f v = line.vec();
-    return line.p1 + (point-line.p1).dot(v)*v;
-}
 
 class Scene {
     public:
