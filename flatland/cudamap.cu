@@ -147,10 +147,13 @@ void Cudamap_addLight(Cudamap* cudamap, float intensity, float x, float y) {
 
 void Cudamap_compute(Cudamap* cudamap, float* field)
 {
+    static int running = 0;
     int n = cudamap->n;
     int w = cudamap->w;
     int h = cudamap->h;
 
+    if (running) return;
+    running = 1;
     for (int i = 0; i < w*h; i++) field[i] = MAX_FLOAT;
     cudaMemcpy(cudamap->d_field, field, sizeof(float)*w*h, cudaMemcpyHostToDevice);
 
@@ -170,4 +173,6 @@ void Cudamap_compute(Cudamap* cudamap, float* field)
         cudaMemcpyToArray(cudamap->d_field_tex, 0, 0, cudamap->d_field, sizeof(float)*w*h, cudaMemcpyDeviceToDevice);
     }
     cudaMemcpy(field, cudamap->d_field, sizeof(float)*w*h, cudaMemcpyDeviceToHost);
+    cudaDeviceSynchronize();
+    running = 0;
 }

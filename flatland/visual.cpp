@@ -265,6 +265,14 @@ void click(int button, int state, int x, int y) {
         dragging = 0;
     }
 }
+void mousemove(int x, int y) {
+    if (dragging && selectedlight >= 0) {
+        Vector2f p = s.clip2world(x,height*displayscale-y,width*displayscale,height*displayscale);
+        p += offset;
+        s.moveLight(p[0], p[1], selectedlight);
+        rerasterizeLights();
+    }
+}
 void draw() {
     glBindVertexArray(vao);
     glActiveTexture(GL_TEXTURE0);
@@ -291,6 +299,7 @@ void setupWindow(int argc, char** argv) {
     glutIdleFunc(draw);
     glutKeyboardFunc(keydown);
     glutMouseFunc(click);
+    glutMotionFunc(mousemove);
     openglInit();
 }
 
