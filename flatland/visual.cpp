@@ -145,11 +145,82 @@ class Scene {
 Scene s;
 GLuint vao;
 GLuint vbo[2];
-GLuint pbo, tbo_tex, progid, tex;
+GLuint pbo, tbo_tex, progid, tex, auxtex;
 
 int selectedlight = -1;
 int dragging = 0;
 Vector2f offset;
+
+float* auxlayer;
+const int RADIUS = 6;
+
+void putpixel(float* arr, int w, int h, float v, int x, int y) {
+    if (x < w && y < h && x >= 0 && y >= 0) arr[x+w*y] = v;
+}
+void rasterizeCircle(float* arr, int w, int h, int x0, int y0, int r, float v=0.4f) {
+    int x = r;
+    int y = 0;
+    int d = 1-r;
+
+    while (x >= y)
+    {
+        putpixel(arr, w, h, v, x0 + x, y0 + y);
+        putpixel(arr, w, h, v, x0 + y, y0 + x);
+        putpixel(arr, w, h, v, x0 - y, y0 + x);
+        putpixel(arr, w, h, v, x0 - x, y0 + y);
+        putpixel(arr, w, h, v, x0 - x, y0 - y);
+        putpixel(arr, w, h, v, x0 - y, y0 - x);
+        putpixel(arr, w, h, v, x0 + y, y0 - x);
+        putpixel(arr, w, h, v, x0 + x, y0 - y);
+
+        y++;
+        if (d > 0) {
+            x--;
+            d += 2*(y-x)+1;
+        } else {
+            d += 2*y+1;
+        }
+    }
+}
+
+void rerasterizeLights() {
+    memset(auxlayer, 0, width*height*displayscale*displayscale*sizeof(float));
+    int ix, iy;
+    for (int i = 0; i < s.numLights(); i++) {
+        s.world2clip(s.getLight(i).head(2), ix, iy, width*displayscale, height*displayscale);
+        if (selectedlight == i) {
+            rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 1.f);
+        } else {
+            rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.4f);
+        }
+    }
+    glBindTexture(GL_TEXTURE_2D, auxtex);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width*displayscale, height*displayscale, GL_RED, GL_FLOAT, auxlayer);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+void selectLight(int i) {
+    int ix, iy;
+    if (selectedlight >= 0) {
+        s.world2clip(s.getLight(selectedlight).head(2), ix, iy, width*displayscale, height*displayscale);
+        rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.4f);
+    }
+    s.world2clip(s.getLight(i<0?selectedlight:i).head(2), ix, iy, width*displayscale, height*displayscale);
+    rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, i<0?0.4f:1.f);
+    glBindTexture(GL_TEXTURE_2D, auxtex);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width*displayscale, height*displayscale, GL_RED, GL_FLOAT, auxlayer);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    selectedlight = i;
+}
+
+void doAddLight(float x, float y) {
+    s.addLight(x,y);
+    int ix, iy;
+    s.world2clip(Vector2f(x,y), ix, iy, width*displayscale, height*displayscale);
+    rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS);
+    glBindTexture(GL_TEXTURE_2D, auxtex);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width*displayscale, height*displayscale, GL_RED, GL_FLOAT, auxlayer);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
 
 void keydown(unsigned char key, int x, int y) {
     if (key == ',') {
@@ -166,25 +237,27 @@ void keydown(unsigned char key, int x, int y) {
         glUniform1f(loc, exposure+0.05);
     } else if (key == 127 && selectedlight >= 0) {
         s.deleteLight(selectedlight);
-        selectedlight = -1;
+        rerasterizeLights();
         dragging = 0;
     }
 }
 
-const float RADIUS = 0.05;
 void click(int button, int state, int x, int y) {
     if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
         Vector2f p = s.clip2world(x,height*displayscale-y,width*displayscale,height*displayscale);
-        selectedlight = -1;
+        Vector2f p2 = s.clip2world(x+RADIUS,height*displayscale-y,width*displayscale,height*displayscale);
+        float r = p2[0] - p[0];
+        bool clicked = false;
         for (int i = 0; i < s.numLights(); i++) {
-            if ((p-s.getLight(i).head(2)).squaredNorm() < RADIUS*RADIUS) {
-                selectedlight = i;
+            if ((p-s.getLight(i).head(2)).squaredNorm() < r*r) {
+                selectLight(i);
+                clicked = true;
                 break;
             }
         }
-        if (selectedlight < 0) {
-            selectedlight = s.numLights();
-            s.addLight(p[0], p[1]);
+        if (!clicked) {
+            doAddLight(p[0], p[1]);
+            selectLight(s.numLights()-1);
         }
         dragging = 1;
         offset = s.getLight(selectedlight).head(2) - p;
@@ -196,11 +269,15 @@ void draw() {
     glBindVertexArray(vao);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, tex);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, auxtex);
     //glBindTexture(GL_TEXTURE_BUFFER,tbo_tex);
     //glTexBuffer(GL_TEXTURE_BUFFER,GL_R32F,pbo);
     glDrawArrays(GL_TRIANGLES,0,6);
     //glBindTexture(GL_TEXTURE_BUFFER,0);
-    glBindTexture(GL_TEXTURE_2D,0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, 0);
     glBindVertexArray(0);
     glutSwapBuffers();
 }
@@ -235,6 +312,15 @@ int main(int argc, char** argv) {
     glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, width, height, 0, GL_RED, GL_FLOAT, 0);
     glBindTexture(GL_TEXTURE_2D, 0);
 
+    auxlayer = new float[width*height*displayscale*displayscale];
+    memset(auxlayer, 0, width*height*displayscale*displayscale*sizeof(float));
+    glGenTextures(1, &auxtex);
+    glBindTexture(GL_TEXTURE_2D, auxtex);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, width*displayscale, height*displayscale, 0, GL_RED, GL_FLOAT, auxlayer);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
     ShaderProgram* prog;
     prog = new FileShaderProgram("tboshader.v.glsl", "tboshader.f.glsl");
     prog->init();
@@ -242,6 +328,7 @@ int main(int argc, char** argv) {
     progid = prog->getProgId();
     glUseProgram(progid);
     glUniform1i(glGetUniformLocation(progid, "buffer"), 0);
+    glUniform1i(glGetUniformLocation(progid, "aux"), 1);
     glUniform2i(glGetUniformLocation(progid, "dim"), width, height);
     glUniform1f(glGetUniformLocation(progid, "exposure"), 0.5);
 
@@ -285,7 +372,7 @@ int main(int argc, char** argv) {
     s.setCudaGLTexture(tex);
     s.setCudaGLBuffer(pbo);
 
-    s.addLight(0.5, 0.5);
+    doAddLight(0.5, 0.5);
 
     glutMainLoop();
 }
