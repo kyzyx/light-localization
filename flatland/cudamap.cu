@@ -43,16 +43,13 @@ __global__ void cuCompute(
         int n,
         float* field,
         int w, int h,
-        float maxx, float maxy, float minx, float miny
+        float rangex, float rangey, float minx, float miny
         )
 {
     __shared__ float mini[BLOCK_SIZE];
 
     int tid = threadIdx.x;
     int surfaceIdx = tid + blockDim.x*blockIdx.x;
-    float x = (maxx - minx)*(blockIdx.y+1.5)/((float)w-2) + minx;
-    float y = (maxy - miny)*(blockIdx.z+1.5)/((float)h-2) + miny;
-    int pointIdx = blockIdx.z*w+blockIdx.y;
     mini[tid] = MAX_FLOAT;
 
     if (surfaceIdx < n) {
@@ -61,15 +58,11 @@ __global__ void cuCompute(
         float4 surfel = surfels[surfaceIdx];
 
         // Computation
-        float Lx = x - surfel.x;
-        float Ly = y - surfel.y;
-        float ndotL = surfel.z*Lx + surfel.w*Ly;
+        float Lx = rangex*blockIdx.y + minx - surfel.x;
+        float Ly = rangey*blockIdx.z + miny - surfel.y;
         float LdotL = Lx*Lx + Ly*Ly;
-        float mag = sqrt(LdotL);
-        Lx /= mag;
-        Ly /= mag;
-        float ndotLn = surfel.z*Lx + surfel.w*Ly;
-        mini[tid] = ndotL>1e-9?intensity*LdotL/ndotLn:MAX_FLOAT;
+        float ndotLn = (surfel.z*Lx + surfel.w*Ly)/sqrt(LdotL);
+        mini[tid] = ndotLn>0?intensity*LdotL/ndotLn:MAX_FLOAT;
     }
     __syncthreads();
 
@@ -86,7 +79,7 @@ __global__ void cuCompute(
 
     // Final data copy
     if (tid == 0) {
-        atomicMin(field+pointIdx, mini[tid]);
+        atomicMin(field+blockIdx.z*w+blockIdx.y, mini[tid]);
     }
 }
 
@@ -160,13 +153,15 @@ void Cudamap_compute(Cudamap* cudamap, float* field)
     dim3 threads(BLOCK_SIZE, 1, 1);
     dim3 blocks((n+BLOCK_SIZE-1)/BLOCK_SIZE, w, h);
 
+    float rangex = (cudamap->maxx-cudamap->minx)/((float)w-2);
+    float rangey = (cudamap->maxy-cudamap->miny)/((float)h-2);
     cuCompute<BLOCK_SIZE><<< blocks, threads >>>(
             cudamap->d_intensities,
             cudamap->d_surfels,
             n,
             cudamap->d_field,
             w, h,
-            cudamap->maxx, cudamap->maxy, cudamap->minx, cudamap->miny
+            rangex, rangey, cudamap->minx + 1.5*rangex, cudamap->miny + 1.5*rangey
             );
 
     if (cudamap->d_field_tex) {
