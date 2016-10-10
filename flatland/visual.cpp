@@ -87,24 +87,24 @@ class Scene {
         void changeIntensity(int i, float intensity) {
             Cudamap_addLight(&cm, intensity - lights[i][2], lights[i][0], lights[i][1]);
             lights[i][2] = intensity;
-            computeField();
+            //computeField();
         }
         void moveLight(float x, float y, int i) {
             Cudamap_addLight(&cm, -lights[i][2], lights[i][0], lights[i][1]);
             lights[i][0] = x;
             lights[i][1] = y;
             Cudamap_addLight(&cm, lights[i][2], lights[i][0], lights[i][1]);
-            computeField();
+            //computeField();
         }
         void deleteLight(int i) {
             Cudamap_addLight(&cm, -lights[i][2], lights[i][0], lights[i][1]);
             lights.erase(lights.begin()+i);
-            computeField();
+            //computeField();
         }
         void addLight(float x, float y, float intensity=1) {
             Cudamap_addLight(&cm, intensity, x, y);
             lights.push_back(Vector3f(x,y,intensity));
-            computeField();
+            //computeField();
         }
         void computeField() {
             Cudamap_compute(&cm, field);
@@ -274,6 +274,7 @@ void mousemove(int x, int y) {
     }
 }
 void draw() {
+    s.computeField();
     glBindVertexArray(vao);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, tex);
