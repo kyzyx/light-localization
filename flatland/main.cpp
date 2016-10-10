@@ -77,6 +77,7 @@ class Scene {
             cm.minx = minp[0];
             cm.miny = minp[1];
             cm.n = surfels.size()/4;
+            cm.d_field_tex = NULL;
             Cudamap_init(&cm, surfels.data());
         }
         void lightSceneCuda(float* img, int w, int h) {

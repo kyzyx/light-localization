@@ -85,7 +85,6 @@ __global__ void cuCompute(
 
 void Cudamap_init(Cudamap* cudamap, float* surfels) {
     cudaSetDevice(0);
-    cudaGLSetGLDevice(0);
     cudaMalloc((void**) &(cudamap->d_intensities), sizeof(float)*cudamap->n);
     cudaMalloc((void**) &(cudamap->d_surfels), sizeof(float4)*cudamap->n);
     cudaMalloc((void**) &(cudamap->d_field), sizeof(float)*cudamap->w*cudamap->h);
@@ -95,6 +94,7 @@ void Cudamap_init(Cudamap* cudamap, float* surfels) {
 }
 
 void Cudamap_setGLTexture(Cudamap* cudamap, unsigned int tex) {
+    cudaGLSetGLDevice(0);
     cudaStream_t cuda_stream;
     cudaGraphicsResource *resources[1];
 
@@ -109,6 +109,7 @@ void Cudamap_setGLTexture(Cudamap* cudamap, unsigned int tex) {
 void Cudamap_setGLBuffer(Cudamap* cudamap, unsigned int pbo) {
     cudaStream_t cuda_stream;
     cudaGraphicsResource *resources[1];
+    cudaGLSetGLDevice(0);
     size_t size;
 
     cudaGraphicsGLRegisterBuffer(resources, pbo, cudaGraphicsMapFlagsNone);
