@@ -101,8 +101,19 @@ void Cudamap_init(Cudamap* cudamap, float* surfels) {
     cudaMemset((void*) cudamap->d_intensities, 0, sizeof(float)*cudamap->n);
 }
 
+void Cudamap_setGLTexture(Cudamap* cudamap, unsigned int tex) {
+    cudaStream_t cuda_stream;
+    cudaGraphicsResource *resources[1];
 
-void Cudamap_setGLTexture(Cudamap* cudamap, unsigned int pbo) {
+    cudaGraphicsGLRegisterImage(resources, tex, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsSurfaceLoadStore);
+    cudaStreamCreate(&cuda_stream);
+    cudaGraphicsMapResources(1, resources, cuda_stream);
+    cudaGraphicsSubResourceGetMappedArray(&(cudamap->d_field_tex), resources[0], 0, 0);
+    cudaGraphicsUnmapResources(1, resources, cuda_stream);
+    cudaStreamDestroy(cuda_stream);
+}
+
+void Cudamap_setGLBuffer(Cudamap* cudamap, unsigned int pbo) {
     cudaStream_t cuda_stream;
     cudaGraphicsResource *resources[1];
     size_t size;
@@ -155,5 +166,8 @@ void Cudamap_compute(Cudamap* cudamap, float* field)
             cudamap->maxx, cudamap->maxy, cudamap->minx, cudamap->miny
             );
 
+    if (cudamap->d_field_tex) {
+        cudaMemcpyToArray(cudamap->d_field_tex, 0, 0, cudamap->d_field, sizeof(float)*w*h, cudaMemcpyDeviceToDevice);
+    }
     cudaMemcpy(field, cudamap->d_field, sizeof(float)*w*h, cudaMemcpyDeviceToHost);
 }

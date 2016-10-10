@@ -6,8 +6,9 @@
 #include "geometry.h"
 #include "cudamap.h"
 
-const int width = 600;
-const int height = 600;
+const int displayscale = 4;
+const int width = 150;
+const int height = 150;
 
 using namespace std;
 using namespace Eigen;
@@ -70,8 +71,11 @@ class Scene {
             cm.n = surfels.size()/4;
             Cudamap_init(&cm, surfels.data());
         }
-        void setCudaGLTexture(GLuint pbo) {
-            Cudamap_setGLTexture(&cm, pbo);
+        void setCudaGLTexture(GLuint tex) {
+            Cudamap_setGLTexture(&cm, tex);
+        }
+        void setCudaGLBuffer(GLuint pbo) {
+            Cudamap_setGLBuffer(&cm, pbo);
         }
 
         int numLights() const {
@@ -141,7 +145,7 @@ class Scene {
 Scene s;
 GLuint vao;
 GLuint vbo[2];
-GLuint pbo, tbo_tex, progid;
+GLuint pbo, tbo_tex, progid, tex;
 
 int selectedlight = -1;
 int dragging = 0;
@@ -170,7 +174,7 @@ void keydown(unsigned char key, int x, int y) {
 const float RADIUS = 0.05;
 void click(int button, int state, int x, int y) {
     if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
-        Vector2f p = s.clip2world(x,height-y,width,height);
+        Vector2f p = s.clip2world(x,height*displayscale-y,width*displayscale,height*displayscale);
         selectedlight = -1;
         for (int i = 0; i < s.numLights(); i++) {
             if ((p-s.getLight(i).head(2)).squaredNorm() < RADIUS*RADIUS) {
@@ -191,10 +195,12 @@ void click(int button, int state, int x, int y) {
 void draw() {
     glBindVertexArray(vao);
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_BUFFER,tbo_tex);
-    glTexBuffer(GL_TEXTURE_BUFFER,GL_R32F,pbo);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    //glBindTexture(GL_TEXTURE_BUFFER,tbo_tex);
+    //glTexBuffer(GL_TEXTURE_BUFFER,GL_R32F,pbo);
     glDrawArrays(GL_TRIANGLES,0,6);
-    glBindTexture(GL_TEXTURE_BUFFER,0);
+    //glBindTexture(GL_TEXTURE_BUFFER,0);
+    glBindTexture(GL_TEXTURE_2D,0);
     glBindVertexArray(0);
     glutSwapBuffers();
 }
@@ -202,7 +208,7 @@ void draw() {
 void setupWindow(int argc, char** argv) {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
-    glutInitWindowSize(width, height);
+    glutInitWindowSize(width*displayscale, height*displayscale);
     glutCreateWindow("Light Localization");
     glutDisplayFunc(draw);
     glutIdleFunc(draw);
@@ -221,6 +227,13 @@ int main(int argc, char** argv) {
     glBindTexture(GL_TEXTURE_BUFFER, tbo_tex);
     glTexBuffer(GL_TEXTURE_BUFFER, GL_R32F, pbo);
     glBindTexture(GL_TEXTURE_BUFFER, 0);
+
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, width, height, 0, GL_RED, GL_FLOAT, 0);
+    glBindTexture(GL_TEXTURE_2D, 0);
 
     ShaderProgram* prog;
     prog = new FileShaderProgram("tboshader.v.glsl", "tboshader.f.glsl");
@@ -269,7 +282,8 @@ int main(int argc, char** argv) {
     s.rasterize(width, height);
 
     s.initCuda(width, height);
-    s.setCudaGLTexture(pbo);
+    s.setCudaGLTexture(tex);
+    s.setCudaGLBuffer(pbo);
 
     s.addLight(0.5, 0.5);
 
