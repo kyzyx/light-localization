@@ -188,6 +188,7 @@ Scene s;
 GLuint vao;
 GLuint vbo[2];
 GLuint pbo, tbo_tex, progid, tex, auxtex;
+GLuint progs[2];
 
 int selectedlight = -1;
 int dragging = 0;
@@ -287,12 +288,13 @@ void keydown(unsigned char key, int x, int y) {
         glGetUniformfv(progid, loc, &exposure);
         if (exposure > 0.05)
             glUniform1f(loc, exposure-0.05);
-    }
-    else if (key == '.') {
+    } else if (key == '.') {
         GLuint loc = glGetUniformLocation(progid, "exposure");
         float exposure;
         glGetUniformfv(progid, loc, &exposure);
         glUniform1f(loc, exposure+0.05);
+    } else if (key == 'm') {
+        progid = progs[0] + progs[1] - progid;
     } else if (key == '[' && selectedlight >= 0) {
         float intensity = s.getLight(selectedlight)[2];
         if (intensity > 0.1) s.changeIntensity(selectedlight, intensity-0.1);
@@ -348,6 +350,7 @@ void mousemove(int x, int y) {
     }
 }
 void draw() {
+    glUseProgram(progid);
     s.computeField();
     glBindVertexArray(vao);
     glActiveTexture(GL_TEXTURE0);
@@ -409,7 +412,19 @@ int main(int argc, char** argv) {
     prog = new FileShaderProgram("tboshader.v.glsl", "tboshader.f.glsl");
     prog->init();
     delete prog;
-    progid = prog->getProgId();
+    progs[0] = prog->getProgId();
+    progid = progs[0];
+    glUseProgram(progid);
+    glUniform1i(glGetUniformLocation(progid, "buffer"), 0);
+    glUniform1i(glGetUniformLocation(progid, "aux"), 1);
+    glUniform2i(glGetUniformLocation(progid, "dim"), width, height);
+    glUniform1f(glGetUniformLocation(progid, "exposure"), 0.5);
+
+    prog = new FileShaderProgram("tboshader.v.glsl", "grad.f.glsl");
+    prog->init();
+    delete prog;
+    progs[1] = prog->getProgId();
+    progid = progs[1];
     glUseProgram(progid);
     glUniform1i(glGetUniformLocation(progid, "buffer"), 0);
     glUniform1i(glGetUniformLocation(progid, "aux"), 1);
