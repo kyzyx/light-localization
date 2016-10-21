@@ -159,10 +159,8 @@ void Cudamap_compute(Cudamap* cudamap, float* field)
     cuCompute<BLOCK_SIZE><<< blocks, threads >>>(
             cudamap->d_intensities,
             cudamap->d_surfels,
-            n,
-            cudamap->d_field,
-            w, h,
-            rangex, rangey, cudamap->minx + 1.5*rangex, cudamap->miny + 1.5*rangey
+            n, cudamap->d_field, w, h,
+            rangex, rangey, cudamap->minx, cudamap->miny
             );
 
     if (cudamap->d_field_tex) {
