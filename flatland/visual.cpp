@@ -187,8 +187,15 @@ class Scene {
 Scene s;
 GLuint vao;
 GLuint vbo[2];
-GLuint pbo, tbo_tex, progid, tex, auxtex;
-GLuint progs[2];
+GLuint pbo, tbo_tex, tex, auxtex;
+GLuint progs[3];
+int currprog;
+enum {
+    PROG_ID = 0,
+    PROG_GRAD = 1,
+    PROG_LOCALMIN = 2,
+    NUM_PROGS
+};
 
 int selectedlight = -1;
 int dragging = 0;
@@ -283,18 +290,18 @@ void selectLight(int i) {
 
 void keydown(unsigned char key, int x, int y) {
     if (key == ',') {
-        GLuint loc = glGetUniformLocation(progid, "exposure");
+        GLuint loc = glGetUniformLocation(progs[currprog], "exposure");
         float exposure;
-        glGetUniformfv(progid, loc, &exposure);
+        glGetUniformfv(progs[currprog], loc, &exposure);
         if (exposure > 0.05)
             glUniform1f(loc, exposure-0.05);
     } else if (key == '.') {
-        GLuint loc = glGetUniformLocation(progid, "exposure");
+        GLuint loc = glGetUniformLocation(progs[currprog], "exposure");
         float exposure;
-        glGetUniformfv(progid, loc, &exposure);
+        glGetUniformfv(progs[currprog], loc, &exposure);
         glUniform1f(loc, exposure+0.05);
     } else if (key == 'm') {
-        progid = progs[0] + progs[1] - progid;
+        currprog = (currprog+1)%NUM_PROGS;
     } else if (key == '[' && selectedlight >= 0) {
         float intensity = s.getLight(selectedlight)[2];
         if (intensity > 0.1) s.changeIntensity(selectedlight, intensity-0.1);
@@ -381,8 +388,7 @@ void setupWindow(int argc, char** argv) {
     openglInit();
 }
 
-int main(int argc, char** argv) {
-    setupWindow(argc, argv);
+void initCudaGlTextures() {
     glGenBuffers(1, &pbo);
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
     glBufferData(GL_PIXEL_UNPACK_BUFFER, width*height*sizeof(float), NULL, GL_DYNAMIC_DRAW);
@@ -399,38 +405,22 @@ int main(int argc, char** argv) {
     glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, width, height, 0, GL_RED, GL_FLOAT, 0);
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    auxlayer = new float[width*height*displayscale*displayscale];
-    memset(auxlayer, 0, width*height*displayscale*displayscale*sizeof(float));
-    glGenTextures(1, &auxtex);
-    glBindTexture(GL_TEXTURE_2D, auxtex);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, width*displayscale, height*displayscale, 0, GL_RED, GL_FLOAT, auxlayer);
-    glBindTexture(GL_TEXTURE_2D, 0);
+}
 
+void setupProg(const char* fshader, int n) {
     ShaderProgram* prog;
-    prog = new FileShaderProgram("tboshader.v.glsl", "tboshader.f.glsl");
+    prog = new FileShaderProgram("tboshader.v.glsl", fshader);
     prog->init();
     delete prog;
-    progs[0] = prog->getProgId();
-    progid = progs[0];
-    glUseProgram(progid);
-    glUniform1i(glGetUniformLocation(progid, "buffer"), 0);
-    glUniform1i(glGetUniformLocation(progid, "aux"), 1);
-    glUniform2i(glGetUniformLocation(progid, "dim"), width, height);
-    glUniform1f(glGetUniformLocation(progid, "exposure"), 0.5);
+    progs[n] = prog->getProgId();
+    glUseProgram(progs[n]);
+    glUniform1i(glGetUniformLocation(progs[n], "buffer"), 0);
+    glUniform1i(glGetUniformLocation(progs[n], "aux"), 1);
+    glUniform2i(glGetUniformLocation(progs[n], "dim"), width, height);
+    glUniform1f(glGetUniformLocation(progs[n], "exposure"), 0.5);
+}
 
-    prog = new FileShaderProgram("tboshader.v.glsl", "grad.f.glsl");
-    prog->init();
-    delete prog;
-    progs[1] = prog->getProgId();
-    progid = progs[1];
-    glUseProgram(progid);
-    glUniform1i(glGetUniformLocation(progid, "buffer"), 0);
-    glUniform1i(glGetUniformLocation(progid, "aux"), 1);
-    glUniform2i(glGetUniformLocation(progid, "dim"), width, height);
-    glUniform1f(glGetUniformLocation(progid, "exposure"), 0.5);
-
+void setupFullscreenQuad() {
     float points[] =  {
         -1.f, -1.f, 0.f,
         1.f, -1.f, 0.f,
@@ -460,6 +450,26 @@ int main(int argc, char** argv) {
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
+}
+
+int main(int argc, char** argv) {
+    setupWindow(argc, argv);
+    auxlayer = new float[width*height*displayscale*displayscale];
+    memset(auxlayer, 0, width*height*displayscale*displayscale*sizeof(float));
+    glGenTextures(1, &auxtex);
+    glBindTexture(GL_TEXTURE_2D, auxtex);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, width*displayscale, height*displayscale, 0, GL_RED, GL_FLOAT, auxlayer);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    initCudaGlTextures();
+    setupFullscreenQuad();
+
+    setupProg("tboshader.f.glsl",0);
+    setupProg("grad.f.glsl",1);
+    setupProg("localmin.f.glsl",2);
+    currprog = 0;
 
     s.addSegment(Line(Vector2f(-1, -1.01), Vector2f(-1, 1.01)));
     s.addSegment(Line(Vector2f(-1.01, 1), Vector2f(1.01, 1)));
