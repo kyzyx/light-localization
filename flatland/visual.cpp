@@ -7,8 +7,8 @@
 #include "cudamap.h"
 
 const int displayscale = 4;
-const int width = 150;
-const int height = 150;
+const int width = 200;
+const int height = 200;
 
 using namespace std;
 using namespace Eigen;
@@ -58,6 +58,18 @@ class Scene {
                     if (e2 >-dx) { err -= dy; x0 += sx; }
                     if (e2 < dy) { err += dx; y0 += sy; }
                 }
+            }
+        }
+        void addCircle(Vector2f o, float r, float res=0.01) {
+            extendBbox(o+Vector2f(r,r));
+            extendBbox(o-Vector2f(r,r));
+            float ares = asin(res/r);
+            for (float a = 0; a < 2*M_PI; a += ares) {
+                Vector2f n = sin(a)*Vector2f(0,1) + cos(a)*Vector2f(1,0);
+                surfels.push_back(o[0] + n[0]*r);
+                surfels.push_back(o[1] + n[1]*r);
+                surfels.push_back(-n[0]);
+                surfels.push_back(-n[1]);
             }
         }
         void initCuda(int w, int h) {
@@ -204,7 +216,7 @@ int dragging = 0;
 Vector2f offset;
 
 float* auxlayer;
-const int RADIUS = 6;
+const int RADIUS = 10;
 
 void putpixel(float* arr, int w, int h, float v, int x, int y) {
     if (x < w && y < h && x >= 0 && y >= 0) arr[x+w*y] = v;
@@ -506,11 +518,15 @@ int main(int argc, char** argv) {
     setupProg("localmin.f.glsl",PROG_LOCALMIN);
     currprog = 0;
 
-    s.addSegment(Line(Vector2f(-1, -1.01), Vector2f(-1, 1.01)));
-    s.addSegment(Line(Vector2f(-1.01, 1), Vector2f(1.01, 1)));
-    s.addSegment(Line(Vector2f(1, 1.01), Vector2f(1, -1.01)));
-    s.addSegment(Line(Vector2f(1.01, -1), Vector2f(-1.01, -1)));
-    s.rasterize(width, height);
+    if (argc > 1) {
+        s.addCircle(Vector2f(0,0), 1.0f, 0.007f);
+    } else {
+        s.addSegment(Line(Vector2f(-1, -1.01), Vector2f(-1, 1.01)));
+        s.addSegment(Line(Vector2f(-1.01, 1), Vector2f(1.01, 1)));
+        s.addSegment(Line(Vector2f(1, 1.01), Vector2f(1, -1.01)));
+        s.addSegment(Line(Vector2f(1.01, -1), Vector2f(-1.01, -1)));
+        s.rasterize(240, 240); // Note: number of surfels should be slightly less than a multiple of 512 (block size)
+    }
 
     s.initCuda(width, height);
     s.setCudaGLTexture(tex);
