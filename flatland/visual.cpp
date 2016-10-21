@@ -188,14 +188,16 @@ Scene s;
 GLuint vao;
 GLuint vbo[2];
 GLuint pbo, tbo_tex, tex, auxtex;
-GLuint progs[3];
+GLuint rfr_tex, rfr_fbo_z, rfr_fbo;
 int currprog;
 enum {
     PROG_ID = 0,
     PROG_GRAD = 1,
-    PROG_LOCALMIN = 2,
+    PROG_LAPLACIAN = 2,
+    PROG_LOCALMIN = 3,
     NUM_PROGS
 };
+GLuint progs[NUM_PROGS];
 
 int selectedlight = -1;
 int dragging = 0;
@@ -357,15 +359,26 @@ void mousemove(int x, int y) {
     }
 }
 void draw() {
-    glUseProgram(progid);
     s.computeField();
     glBindVertexArray(vao);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, tex);
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, auxtex);
     //glBindTexture(GL_TEXTURE_BUFFER,tbo_tex);
     //glTexBuffer(GL_TEXTURE_BUFFER,GL_R32F,pbo);
+    //
+    if (currprog == PROG_LOCALMIN || currprog == PROG_LAPLACIAN) {
+        glBindFramebuffer(GL_FRAMEBUFFER, rfr_fbo);
+        glUseProgram(progs[PROG_GRAD]);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glDrawArrays(GL_TRIANGLES,0,6);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, rfr_tex);
+    }
+    glUseProgram(progs[currprog]);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, auxtex);
     glDrawArrays(GL_TRIANGLES,0,6);
     //glBindTexture(GL_TEXTURE_BUFFER,0);
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -386,6 +399,26 @@ void setupWindow(int argc, char** argv) {
     glutMouseFunc(click);
     glutMotionFunc(mousemove);
     openglInit();
+}
+
+void initRenderTextures() {
+    glGenTextures(1, &rfr_tex);
+    glBindTexture(GL_TEXTURE_2D, rfr_tex);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width*displayscale, height*displayscale, 0, GL_RGBA, GL_FLOAT, 0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    glGenRenderbuffers(1, &rfr_fbo_z);
+    glBindRenderbuffer(GL_RENDERBUFFER, rfr_fbo_z);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width*displayscale, height*displayscale);
+    glBindRenderbuffer(GL_RENDERBUFFER, 0);
+
+    glGenFramebuffers(1, &rfr_fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, rfr_fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rfr_tex, 0);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rfr_fbo_z);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void initCudaGlTextures() {
@@ -464,11 +497,13 @@ int main(int argc, char** argv) {
     glBindTexture(GL_TEXTURE_2D, 0);
 
     initCudaGlTextures();
+    initRenderTextures();
     setupFullscreenQuad();
 
-    setupProg("tboshader.f.glsl",0);
-    setupProg("grad.f.glsl",1);
-    setupProg("localmin.f.glsl",2);
+    setupProg("tboshader.f.glsl",PROG_ID);
+    setupProg("grad.f.glsl",PROG_GRAD);
+    setupProg("grad.f.glsl",PROG_LAPLACIAN);
+    setupProg("localmin.f.glsl",PROG_LOCALMIN);
     currprog = 0;
 
     s.addSegment(Line(Vector2f(-1, -1.01), Vector2f(-1, 1.01)));
