@@ -3,3 +3,4 @@ visual
 *.o
 *.ppm
 *.lt
+.*.swp
