@@ -17,6 +17,27 @@ __device__ static float atomicMin(float* address, float val)
     } while (assumed != old);
     return __int_as_float(old);
 }
+__device__ static float2 cmpVI(float2 a, float2 b) {
+    return a.x<b.x?a:b;
+}
+__device__ static unsigned long long int _float2_ll(float2 a) {
+    return *((unsigned long long int*) &a);
+}
+__device__ static float2 _ll_float2(unsigned long long int a) {
+    return *((float2*) &a);
+}
+__device__ static float2 atomicMin2(float2* address, float2 val)
+{
+    unsigned long long int* address_as_i = (unsigned long long int*) address;
+    unsigned long long int old = *address_as_i, assumed;
+    do {
+        assumed = old;
+        old = ::atomicCAS(address_as_i, assumed,
+                _float2_ll(cmpVI(val, _ll_float2(assumed)))
+                );
+    } while (assumed != old);
+    return _ll_float2(old);
+}
 
 __global__ void cuAddlight(float* intensities, float4* surfels, float intensity, float x, float y, int n)
 {
@@ -41,16 +62,17 @@ __global__ void cuCompute(
         float* intensities,
         float4* surfels,
         int n,
-        float* field,
+        float2* field,
         int w, int h,
         float rangex, float rangey, float minx, float miny
         )
 {
-    __shared__ float mini[BLOCK_SIZE];
+    __shared__ float2 mini[BLOCK_SIZE];
 
     int tid = threadIdx.x;
     int surfaceIdx = tid + blockDim.x*blockIdx.x;
-    mini[tid] = MAX_FLOAT;
+    mini[tid].x = MAX_FLOAT;
+    mini[tid].y = __int_as_float(tid);
 
     if (surfaceIdx < n) {
         // Data load
@@ -62,24 +84,69 @@ __global__ void cuCompute(
         float Ly = rangey*blockIdx.z + miny - surfel.y;
         float LdotL = Lx*Lx + Ly*Ly;
         float ndotLn = (surfel.z*Lx + surfel.w*Ly)/sqrt(LdotL);
-        mini[tid] = ndotLn>0?intensity*LdotL/ndotLn:MAX_FLOAT;
+        mini[tid].x = ndotLn>0?intensity*LdotL/ndotLn:MAX_FLOAT;
     }
     __syncthreads();
 
     // Reduction
-    if (blockSize >= 512) { if (tid < 256) mini[tid] = fminf(mini[tid + 256], mini[tid]); __syncthreads(); }
-    if (blockSize >= 256) { if (tid < 128) mini[tid] = fminf(mini[tid + 128], mini[tid]); __syncthreads(); }
-    if (blockSize >= 128) { if (tid < 64) mini[tid] = fminf(mini[tid + 64], mini[tid]);   __syncthreads(); }
-    if (blockSize >= 64)  { if (tid < 32) mini[tid] = fminf(mini[tid + 32], mini[tid]);   __syncthreads(); }
-    if (blockSize >= 32)  { if (tid < 16) mini[tid] = fminf(mini[tid + 16], mini[tid]);   __syncthreads(); }
-    if (blockSize >= 16)  { if (tid < 8) mini[tid] = fminf(mini[tid + 8], mini[tid]);     __syncthreads(); }
-    if (blockSize >= 8)   { if (tid < 4) mini[tid] = fminf(mini[tid + 4], mini[tid]);     __syncthreads(); }
-    if (blockSize >= 4)   { if (tid < 2) mini[tid] = fminf(mini[tid + 2], mini[tid]);     __syncthreads(); }
-    if (blockSize >= 2)   { if (tid < 1) mini[tid] = fminf(mini[tid + 1], mini[tid]);     __syncthreads(); }
+    if (blockSize >= 512) {
+        if (tid < 256) {
+            mini[tid] = mini[tid+256].x<mini[tid].x?mini[tid+256]:mini[tid];
+        }
+        __syncthreads(); 
+    }
+    if (blockSize >= 256) {
+        if (tid < 128) {
+            mini[tid] = mini[tid+128].x<mini[tid].x?mini[tid+128]:mini[tid];
+        }
+        __syncthreads(); 
+    }
+    if (blockSize >= 128) {
+        if (tid < 64) {
+            mini[tid] = mini[tid+64].x<mini[tid].x?mini[tid+64]:mini[tid];
+        }
+        __syncthreads(); 
+    }
+    if (blockSize >= 64)  {
+        if (tid < 32) {
+            mini[tid] = mini[tid+32].x<mini[tid].x?mini[tid+32]:mini[tid];
+        }
+        __syncthreads(); 
+    }
+    if (blockSize >= 32)  {
+        if (tid < 16) {
+            mini[tid] = mini[tid+16].x<mini[tid].x?mini[tid+16]:mini[tid];
+        }
+        __syncthreads(); 
+    }
+    if (blockSize >= 16)  {
+        if (tid < 8) {
+            mini[tid] = mini[tid+8].x<mini[tid].x?mini[tid+8]:mini[tid];
+        }
+        __syncthreads(); 
+    }
+    if (blockSize >= 8)   {
+        if (tid < 4) {
+            mini[tid] = mini[tid+4].x<mini[tid].x?mini[tid+4]:mini[tid];
+        }
+        __syncthreads(); 
+    }
+    if (blockSize >= 4)   {
+        if (tid < 2) {
+            mini[tid] = mini[tid+2].x<mini[tid].x?mini[tid+2]:mini[tid];
+        }
+        __syncthreads(); 
+    }
+    if (blockSize >= 2)   {
+        if (tid < 1) {
+            mini[tid] = mini[tid+1].x<mini[tid].x?mini[tid+1]:mini[tid];
+        }
+        __syncthreads(); 
+    }
 
     // Final data copy
     if (tid == 0) {
-        atomicMin(field+blockIdx.z*w+blockIdx.y, mini[tid]);
+        atomicMin2(field+blockIdx.z*w+blockIdx.y, mini[0]);
     }
 }
 
@@ -87,7 +154,7 @@ void Cudamap_init(Cudamap* cudamap, float* surfels) {
     cudaSetDevice(0);
     cudaMalloc((void**) &(cudamap->d_intensities), sizeof(float)*cudamap->n);
     cudaMalloc((void**) &(cudamap->d_surfels), sizeof(float4)*cudamap->n);
-    cudaMalloc((void**) &(cudamap->d_field), sizeof(float)*cudamap->w*cudamap->h);
+    cudaMalloc((void**) &(cudamap->d_field), sizeof(float2)*cudamap->w*cudamap->h);
 
     cudaMemcpy(cudamap->d_surfels, surfels, sizeof(float4)*cudamap->n, cudaMemcpyHostToDevice);
     cudaMemset((void*) cudamap->d_intensities, 0, sizeof(float)*cudamap->n);
@@ -148,8 +215,11 @@ void Cudamap_compute(Cudamap* cudamap, float* field)
 
     if (running) return;
     running = 1;
-    for (int i = 0; i < w*h; i++) field[i] = MAX_FLOAT;
-    cudaMemcpy(cudamap->d_field, field, sizeof(float)*w*h, cudaMemcpyHostToDevice);
+    for (int i = 0; i < w*h; i++) {
+        field[2*i] = MAX_FLOAT;
+        field[2*i+1] = 0;
+    }
+    cudaMemcpy(cudamap->d_field, field, sizeof(float2)*w*h, cudaMemcpyHostToDevice);
 
     dim3 threads(BLOCK_SIZE, 1, 1);
     dim3 blocks((n+BLOCK_SIZE-1)/BLOCK_SIZE, w, h);
@@ -164,9 +234,9 @@ void Cudamap_compute(Cudamap* cudamap, float* field)
             );
 
     if (cudamap->d_field_tex) {
-        cudaMemcpyToArray(cudamap->d_field_tex, 0, 0, cudamap->d_field, sizeof(float)*w*h, cudaMemcpyDeviceToDevice);
+        cudaMemcpyToArray(cudamap->d_field_tex, 0, 0, cudamap->d_field, sizeof(float2)*w*h, cudaMemcpyDeviceToDevice);
     }
-    cudaMemcpy(field, cudamap->d_field, sizeof(float)*w*h, cudaMemcpyDeviceToHost);
+    cudaMemcpy(field, cudamap->d_field, sizeof(float2)*w*h, cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize();
     running = 0;
 }

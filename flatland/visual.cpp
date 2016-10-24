@@ -75,7 +75,7 @@ class Scene {
         void initCuda(int w, int h) {
             cm.w = w;
             cm.h = h;
-            field = new float[w*h];
+            field = new float[2*w*h];
             cm.maxx = maxp[0];
             cm.maxy = maxp[1];
             cm.minx = minp[0];
@@ -207,6 +207,7 @@ enum {
     PROG_GRAD = 1,
     PROG_LAPLACIAN = 2,
     PROG_LOCALMIN = 3,
+    PROG_SOURCEMAP = 4,
     NUM_PROGS
 };
 GLuint progs[NUM_PROGS];
@@ -378,6 +379,13 @@ void draw() {
     //glBindTexture(GL_TEXTURE_BUFFER,tbo_tex);
     //glTexBuffer(GL_TEXTURE_BUFFER,GL_R32F,pbo);
     //
+    if (currprog == PROG_SOURCEMAP) {
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    } else {
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    }
     if (currprog == PROG_LOCALMIN || currprog == PROG_LAPLACIAN) {
         glBindFramebuffer(GL_FRAMEBUFFER, rfr_fbo);
         glUseProgram(progs[PROG_GRAD]);
@@ -436,7 +444,7 @@ void initRenderTextures() {
 void initCudaGlTextures() {
     glGenBuffers(1, &pbo);
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
-    glBufferData(GL_PIXEL_UNPACK_BUFFER, width*height*sizeof(float), NULL, GL_DYNAMIC_DRAW);
+    glBufferData(GL_PIXEL_UNPACK_BUFFER, 2*width*height*sizeof(float), NULL, GL_DYNAMIC_DRAW);
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
     glGenTextures(1, &tbo_tex);
     glBindTexture(GL_TEXTURE_BUFFER, tbo_tex);
@@ -447,9 +455,8 @@ void initCudaGlTextures() {
     glBindTexture(GL_TEXTURE_2D, tex);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, width, height, 0, GL_RED, GL_FLOAT, 0);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RG32F, width, height, 0, GL_RG, GL_FLOAT, 0);
     glBindTexture(GL_TEXTURE_2D, 0);
-
 }
 
 void setupProg(const char* fshader, int n) {
@@ -516,6 +523,7 @@ int main(int argc, char** argv) {
     setupProg("grad.f.glsl",PROG_GRAD);
     setupProg("grad.f.glsl",PROG_LAPLACIAN);
     setupProg("localmin.f.glsl",PROG_LOCALMIN);
+    setupProg("sourcemap.f.glsl",PROG_SOURCEMAP);
     currprog = 0;
 
     if (argc > 1) {

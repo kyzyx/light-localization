@@ -7,7 +7,7 @@ typedef struct {
     // Device pointers
     float* d_intensities;
     float4* d_surfels;
-    float* d_field;
+    float2* d_field;
     cudaArray* d_field_tex;
 
     // Data bounds
