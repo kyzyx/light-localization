@@ -43,6 +43,27 @@ __global__ void cuAddlight(float* intensities, float4* surfels, float intensity,
         atomicAdd(intensities+surfaceIdx, ret);
     }
 }
+__global__ void cuAddDirectionalLight(float* intensities, float4* surfels, float intensity, float x, float y, float nx, float ny, float d, int n)
+{
+    int tid = threadIdx.x;
+    int surfaceIdx = tid + blockDim.x*blockIdx.x;
+    if (surfaceIdx < n) {
+        float4 surfel = surfels[surfaceIdx];
+
+        float2 L;
+        L.x = x - surfel.x;
+        L.y = y - surfel.y;
+
+        float LdotL = L.x*L.x+L.y*L.y;
+        float ndotL = fmaxf(surfel.z*L.x+surfel.w*L.y,0.f);
+
+        float mag = sqrt(LdotL);
+        float ct = -(L.x*nx + L.y*ny)/mag;
+        float scaling = ct>0?pow(ct, d):0;
+        float ret = LdotL>0?ndotL*intensity*scaling/(LdotL*mag):0;
+        atomicAdd(intensities+surfaceIdx, ret);
+    }
+}
 
 template <unsigned int blockSize>
 __global__ void cuCompute(
@@ -177,6 +198,13 @@ void Cudamap_setIntensities(Cudamap* cudamap, float* intensities) {
 void Cudamap_addLight(Cudamap* cudamap, float intensity, float x, float y) {
     cuAddlight<<< (cudamap->n+BLOCK_SIZE-1)/BLOCK_SIZE, BLOCK_SIZE >>>(
             cudamap->d_intensities, cudamap->d_surfels, intensity, x, y, cudamap->n);
+}
+void Cudamap_addDirectionalLight(Cudamap* cudamap, float intensity, float x, float y, float fx, float fy) {
+    float dx = fx - x;
+    float dy = fy - y;
+    float d = sqrt(dx*dx + dy*dy);
+    cuAddDirectionalLight<<< (cudamap->n+BLOCK_SIZE-1)/BLOCK_SIZE, BLOCK_SIZE >>>(
+            cudamap->d_intensities, cudamap->d_surfels, intensity, x, y, fx/d, fy/d, d, cudamap->n);
 }
 
 void Cudamap_compute(Cudamap* cudamap, float* field)
