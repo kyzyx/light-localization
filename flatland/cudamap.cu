@@ -5,18 +5,6 @@
 #define BLOCK_SIZE 512
 #define MAX_FLOAT 1e4
 
-// From http://stackoverflow.com/questions/17399119/cant-we-use-atomic-operations-for-floating-point-variables-in-cuda
-__device__ static float atomicMin(float* address, float val)
-{
-    int* address_as_i = (int*) address;
-    int old = *address_as_i, assumed;
-    do {
-        assumed = old;
-        old = ::atomicCAS(address_as_i, assumed,
-                __float_as_int(::fminf(val, __int_as_float(assumed))));
-    } while (assumed != old);
-    return __int_as_float(old);
-}
 __device__ static float2 cmpVI(float2 a, float2 b) {
     return a.x<b.x?a:b;
 }
@@ -26,6 +14,7 @@ __device__ static unsigned long long int _float2_ll(float2 a) {
 __device__ static float2 _ll_float2(unsigned long long int a) {
     return *((float2*) &a);
 }
+// From http://stackoverflow.com/questions/17399119/cant-we-use-atomic-operations-for-floating-point-variables-in-cuda
 __device__ static float2 atomicMin2(float2* address, float2 val)
 {
     unsigned long long int* address_as_i = (unsigned long long int*) address;
@@ -46,9 +35,7 @@ __global__ void cuAddlight(float* intensities, float4* surfels, float intensity,
     if (surfaceIdx < n) {
         float4 surfel = surfels[surfaceIdx];
 
-        float2 L;
-        L.x = x - surfel.x;
-        L.y = y - surfel.y;
+        float2 L = make_float2(x - surfel.x, y - surfel.y);
 
         float LdotL = L.x*L.x+L.y*L.y;
         float ndotL = fmaxf(surfel.z*L.x+surfel.w*L.y,0.f);
@@ -71,8 +58,7 @@ __global__ void cuCompute(
 
     int tid = threadIdx.x;
     int surfaceIdx = tid + blockDim.x*blockIdx.x;
-    mini[tid].x = MAX_FLOAT;
-    mini[tid].y = 0;
+    mini[tid] = make_float2(MAX_FLOAT, 0);
 
     if (surfaceIdx < n) {
         // Data load
@@ -84,8 +70,9 @@ __global__ void cuCompute(
         mini[tid].y = __int_as_float((ex<<15)|ey);
 
         // Computation
-        float Lx = rangex*blockIdx.y + minx - surfel.x;
-        float Ly = rangey*blockIdx.z + miny - surfel.y;
+        float2 p = make_float2(rangex*blockIdx.y + minx, rangey*blockIdx.z + miny);
+        float Lx = p.x - surfel.x;
+        float Ly = p.y - surfel.y;
         float LdotL = Lx*Lx + Ly*Ly;
         float ndotLn = (surfel.z*Lx + surfel.w*Ly)/sqrt(LdotL);
         mini[tid].x = ndotLn>0?intensity*LdotL/ndotLn:MAX_FLOAT;
@@ -94,57 +81,39 @@ __global__ void cuCompute(
 
     // Reduction
     if (blockSize >= 512) {
-        if (tid < 256) {
-            mini[tid] = mini[tid+256].x<mini[tid].x?mini[tid+256]:mini[tid];
-        }
+        if (tid < 256) { mini[tid] = cmpVI(mini[tid+256], mini[tid]); }
         __syncthreads(); 
     }
     if (blockSize >= 256) {
-        if (tid < 128) {
-            mini[tid] = mini[tid+128].x<mini[tid].x?mini[tid+128]:mini[tid];
-        }
+        if (tid < 128) { mini[tid] = cmpVI(mini[tid+128], mini[tid]); }
         __syncthreads(); 
     }
     if (blockSize >= 128) {
-        if (tid < 64) {
-            mini[tid] = mini[tid+64].x<mini[tid].x?mini[tid+64]:mini[tid];
-        }
+        if (tid < 64)  { mini[tid] = cmpVI(mini[tid+64], mini[tid]); }
         __syncthreads(); 
     }
     if (blockSize >= 64)  {
-        if (tid < 32) {
-            mini[tid] = mini[tid+32].x<mini[tid].x?mini[tid+32]:mini[tid];
-        }
+        if (tid < 32)  { mini[tid] = cmpVI(mini[tid+32], mini[tid]); }
         __syncthreads(); 
     }
     if (blockSize >= 32)  {
-        if (tid < 16) {
-            mini[tid] = mini[tid+16].x<mini[tid].x?mini[tid+16]:mini[tid];
-        }
+        if (tid < 16)  { mini[tid] = cmpVI(mini[tid+16], mini[tid]); }
         __syncthreads(); 
     }
     if (blockSize >= 16)  {
-        if (tid < 8) {
-            mini[tid] = mini[tid+8].x<mini[tid].x?mini[tid+8]:mini[tid];
-        }
+        if (tid < 8)   { mini[tid] = cmpVI(mini[tid+8], mini[tid]); }
         __syncthreads(); 
     }
     if (blockSize >= 8)   {
-        if (tid < 4) {
-            mini[tid] = mini[tid+4].x<mini[tid].x?mini[tid+4]:mini[tid];
-        }
+        if (tid < 4)   { mini[tid] = cmpVI(mini[tid+4], mini[tid]); }
         __syncthreads(); 
     }
     if (blockSize >= 4)   {
-        if (tid < 2) {
-            mini[tid] = mini[tid+2].x<mini[tid].x?mini[tid+2]:mini[tid];
-        }
+        if (tid < 2)   { mini[tid] = cmpVI(mini[tid+2], mini[tid]); }
         __syncthreads(); 
     }
     if (blockSize >= 2)   {
-        if (tid < 1) {
-            mini[tid] = mini[tid+1].x<mini[tid].x?mini[tid+1]:mini[tid];
-        }
+        if (tid < 1)   { mini[tid] = cmpVI(mini[tid+1], mini[tid]); }
         __syncthreads(); 
     }
 
