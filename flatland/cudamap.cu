@@ -44,6 +44,8 @@ __device__ static char lineocclusion(float2* line_occluders, int nlines, float2 
     return v;
 }
 
+const float EPSILON = 1e-5;
+
 __global__ void cuAddlight(
         float* intensities,
         float4* surfels,
@@ -64,13 +66,12 @@ __global__ void cuAddlight(
 
     if (surfaceIdx < n) {
         float4 surfel = surfels[surfaceIdx];
-
         float2 L = make_float2(x - surfel.x, y - surfel.y);
 
         float LdotL = L.x*L.x+L.y*L.y;
         float ndotL = fmaxf(surfel.z*L.x+surfel.w*L.y,0.f);
         float ret = LdotL>0?ndotL*intensity/(LdotL*sqrt(LdotL)):0;
-        char occl = lineocclusion(shared_line_occluders, nlines*2, make_float2(surfel.x, surfel.y), make_float2(x,y));
+        char occl = lineocclusion(shared_line_occluders, nlines*2, make_float2(surfel.x + EPSILON*surfel.z, surfel.y + EPSILON*surfel.w), make_float2(x,y));
         atomicAdd(intensities+surfaceIdx, ret*occl);
     }
 }
@@ -95,10 +96,7 @@ __global__ void cuAddDirectionalLight(
 
     if (surfaceIdx < n) {
         float4 surfel = surfels[surfaceIdx];
-
-        float2 L;
-        L.x = x - surfel.x;
-        L.y = y - surfel.y;
+        float2 L = make_float2(x - surfel.x, y - surfel.y);
 
         float LdotL = L.x*L.x+L.y*L.y;
         float ndotL = fmaxf(surfel.z*L.x+surfel.w*L.y,0.f);
@@ -107,7 +105,7 @@ __global__ void cuAddDirectionalLight(
         float ct = -(L.x*nx + L.y*ny)/mag;
         float scaling = ct>0?pow(ct, d):0;
         float ret = LdotL>0?ndotL*intensity*scaling/(LdotL*mag):0;
-        char occl = lineocclusion(shared_line_occluders, nlines*2, make_float2(surfel.x, surfel.y), make_float2(x,y));
+        char occl = lineocclusion(shared_line_occluders, nlines*2, make_float2(surfel.x + EPSILON*surfel.z, surfel.y + EPSILON*surfel.w), make_float2(x,y));
         atomicAdd(intensities+surfaceIdx, ret*occl);
     }
 }
@@ -155,7 +153,7 @@ __global__ void cuCompute(
         float Ly = p.y - surfel.y;
         float LdotL = Lx*Lx + Ly*Ly;
         float ndotLn = (surfel.z*Lx + surfel.w*Ly)/sqrt(LdotL);
-        char occl = lineocclusion(shared_line_occluders, nlines*2, make_float2(surfel.x, surfel.y), p);
+        char occl = lineocclusion(shared_line_occluders, nlines*2, make_float2(surfel.x + surfel.z*EPSILON, surfel.y + surfel.w*EPSILON), p);
         mini[tid].x = occl*ndotLn>0?intensity*LdotL/ndotLn:MAX_FLOAT;
     }
     __syncthreads();
