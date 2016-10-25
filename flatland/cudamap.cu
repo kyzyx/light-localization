@@ -262,9 +262,7 @@ void Cudamap_addLight(Cudamap* cudamap, float intensity, float x, float y) {
             cudamap->d_intensities, cudamap->d_surfels, cudamap->d_line_occluders, cudamap->nlines, intensity, x, y, cudamap->n);
 }
 void Cudamap_addDirectionalLight(Cudamap* cudamap, float intensity, float x, float y, float fx, float fy) {
-    float dx = fx - x;
-    float dy = fy - y;
-    float d = sqrt(dx*dx + dy*dy);
+    float d = sqrt(fx*fx + fy*fy);
     cuAddDirectionalLight<<< (cudamap->n+BLOCK_SIZE-1)/BLOCK_SIZE, BLOCK_SIZE >>>(
             cudamap->d_intensities, cudamap->d_surfels, cudamap->d_line_occluders, cudamap->nlines, intensity, x, y, fx/d, fy/d, d, cudamap->n);
 }
