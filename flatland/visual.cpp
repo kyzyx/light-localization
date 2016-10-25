@@ -96,16 +96,27 @@ class Scene {
         Vector3f getLight(int idx) const {
             return lights[idx];
         }
+        float getAngle(int idx) const {
+            return directions[idx];
+        }
         void addLightWithSymmetry(float intensity, int i) {
-            Cudamap_addLight(&cm, intensity, lights[i][0], lights[i][1]);
-            if (symmetries[i] & 1) {
-                Cudamap_addLight(&cm, intensity, -lights[i][0], lights[i][1]);
-            }
-            if (symmetries[i] & 2) {
-                Cudamap_addLight(&cm, intensity, lights[i][0], -lights[i][1]);
-            }
-            if (symmetries[i] & 4) {
-                Cudamap_addLight(&cm, intensity, -lights[i][0], -lights[i][1]);
+            if (directions[i] < 0) {
+                Cudamap_addLight(&cm, intensity, lights[i][0], lights[i][1]);
+                if (symmetries[i] & 1) {
+                    Cudamap_addLight(&cm, intensity, -lights[i][0], lights[i][1]);
+                }
+                if (symmetries[i] & 2) {
+                    Cudamap_addLight(&cm, intensity, lights[i][0], -lights[i][1]);
+                }
+                if (symmetries[i] & 4) {
+                    Cudamap_addLight(&cm, intensity, -lights[i][0], -lights[i][1]);
+                }
+            } else {
+                Cudamap_addDirectionalLight(
+                        &cm, intensity, lights[i][0], lights[i][1],
+                        cos(directions[i])*falloffs[i],
+                        sin(directions[i])*falloffs[i]
+                        );
             }
         }
         void changeIntensity(int i, float intensity) {
@@ -120,13 +131,32 @@ class Scene {
             addLightWithSymmetry(lights[i][2], i);
             //computeField();
         }
+        void changeDirection(float a, float falloff, int i) {
+            if (directions[i] < 0) return;
+            Cudamap_addDirectionalLight(
+                    &cm, -lights[i][2], lights[i][0], lights[i][1],
+                    cos(directions[i])*falloffs[i],
+                    sin(directions[i])*falloffs[i]
+                    );
+            directions[i] = a;
+            if (falloff > 0) falloffs[i] = falloff;
+            Cudamap_addDirectionalLight(
+                    &cm, lights[i][2], lights[i][0], lights[i][1],
+                    cos(directions[i])*falloffs[i],
+                    sin(directions[i])*falloffs[i]
+                    );
+            //computeField();
+        }
         void deleteLight(int i) {
             addLightWithSymmetry(-lights[i][2], i);
             lights.erase(lights.begin()+i);
+            directions.erase(directions.begin()+i);
+            falloffs.erase(falloffs.begin()+i);
             symmetries.erase(symmetries.begin()+i);
             //computeField();
         }
         void addSymmetry(int i, int symm) {
+            if (directions[i] >= 0) return;
             int newsym = symm - (symm & symmetries[i]);
             int oldsym = symm & symmetries[i];
             if (newsym & 1) {
@@ -156,8 +186,16 @@ class Scene {
         void addLight(float x, float y, float intensity=1) {
             Cudamap_addLight(&cm, intensity, x, y);
             lights.push_back(Vector3f(x,y,intensity));
+            directions.push_back(-1);
+            falloffs.push_back(-1);
             symmetries.push_back(0);
-            //computeField();
+        }
+        void addDirectionalLight(float x, float y, float a, float falloff, float intensity=1) {
+            Cudamap_addDirectionalLight(&cm, intensity, x, y, cos(a)*falloff, sin(a)*falloff);
+            lights.push_back(Vector3f(x,y,intensity));
+            directions.push_back(a);
+            falloffs.push_back(falloff);
+            symmetries.push_back(0);
         }
         void computeField() {
             Cudamap_compute(&cm, field);
@@ -186,6 +224,8 @@ class Scene {
         Vector2f minp, maxp;
         vector<Line> lines;
         vector<Vector3f> lights;
+        vector<float> directions;
+        vector<float> falloffs;
         vector<int> symmetries;
 
         Cudamap cm;
@@ -218,6 +258,7 @@ Vector2f offset;
 
 float* auxlayer;
 const int RADIUS = 10;
+const float ANGLEINC = M_PI/18.f;
 
 void putpixel(float* arr, int w, int h, float v, int x, int y) {
     if (x < w && y < h && x >= 0 && y >= 0) arr[x+w*y] = v;
@@ -254,10 +295,17 @@ void rerasterizeLights() {
     for (int i = 0; i < s.numLights(); i++) {
         Vector2f p = s.getLight(i).head(2);
         s.world2clip(p, ix, iy, width*displayscale, height*displayscale);
+        float a = s.getAngle(i);
         if (selectedlight == i) {
             rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 1.f);
+            if (a >= 0) {
+                rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix + RADIUS*cos(a), iy + RADIUS*sin(a), RADIUS/2, 1.f);
+            }
         } else {
             rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.4f);
+            if (a >= 0) {
+                rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix + RADIUS*cos(a), iy + RADIUS*sin(a), RADIUS/2, 1.f);
+            }
         }
 
         if (s.getSymmetries(i) & 1) {
@@ -324,14 +372,31 @@ void keydown(unsigned char key, int x, int y) {
         float intensity = s.getLight(selectedlight)[2];
         s.changeIntensity(selectedlight, intensity+0.1);
     } else if (key == 'q' && selectedlight >= 0) {
-        s.addSymmetry(selectedlight, 1);
+        float a = s.getAngle(selectedlight);
+        if (a < 0) {
+            s.addSymmetry(selectedlight, 1);
+        } else {
+            a -= ANGLEINC;
+            if (a < 0) a += 2*M_PI;
+            s.changeDirection(a, -1, selectedlight);
+        }
         rerasterizeLights();
     } else if (key == 'w' && selectedlight >= 0) {
-        s.addSymmetry(selectedlight, 2);
+        float a = s.getAngle(selectedlight);
+        if (a < 0) {
+            s.addSymmetry(selectedlight, 2);
+        } else {
+            a += ANGLEINC;
+            if (a > 2*M_PI) a -= 2*M_PI;
+            s.changeDirection(a, -1, selectedlight);
+        }
         rerasterizeLights();
     } else if (key == 'e' && selectedlight >= 0) {
-        s.addSymmetry(selectedlight, 4);
-        rerasterizeLights();
+        float a = s.getAngle(selectedlight);
+        if (a < 0) {
+            s.addSymmetry(selectedlight, 4);
+            rerasterizeLights();
+        }
     } else if (key == 127 && selectedlight >= 0) {
         s.deleteLight(selectedlight);
         rerasterizeLights();
@@ -353,7 +418,11 @@ void click(int button, int state, int x, int y) {
             }
         }
         if (!clicked) {
-            s.addLight(p[0], p[1]);
+            if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
+                s.addDirectionalLight(p[0], p[1], 0, 1);
+            } else {
+                s.addLight(p[0], p[1]);
+            }
             rerasterizeLights();
             selectLight(s.numLights()-1);
         }
