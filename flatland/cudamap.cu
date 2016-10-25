@@ -108,7 +108,7 @@ __global__ void cuAddDirectionalLight(
 
         float mag = sqrt(LdotL);
         float ct = -(L.x*nx + L.y*ny)/mag;
-        float scaling = ct>0?pow(ct, d):0;
+        float scaling = ct>0.2?pow(ct, d):0;
         float ret = LdotL>0?ndotL*intensity*scaling/(LdotL*mag):0;
         char occl = lineocclusion(shared_line_occluders, nlines*2, make_float2(surfel.x + EPSILON*surfel.z, surfel.y + EPSILON*surfel.w), make_float2(x,y));
         atomicAdd(intensities+surfaceIdx, ret*occl);
@@ -160,7 +160,8 @@ __global__ void cuCompute(
         float ndotLn = (surfel.z*Lx + surfel.w*Ly)/sqrt(LdotL);
         char occl = lineocclusion(shared_line_occluders, nlines*2, make_float2(surfel.x + surfel.z*EPSILON, surfel.y + surfel.w*EPSILON), p);
         occl *= circleocclusion(ncircles, make_float2(surfel.x + surfel.z*EPSILON, surfel.y + surfel.w*EPSILON), p);
-        mini[tid].x = intensity*occl*ndotLn>0?intensity*LdotL/ndotLn:MAX_FLOAT;
+        float v = intensity*occl*ndotLn>0?intensity*LdotL/ndotLn:MAX_FLOAT;
+        mini[tid].x = v>0.f?v:MAX_FLOAT;
     }
     __syncthreads();
 
