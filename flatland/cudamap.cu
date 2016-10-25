@@ -72,12 +72,16 @@ __global__ void cuCompute(
     int tid = threadIdx.x;
     int surfaceIdx = tid + blockDim.x*blockIdx.x;
     mini[tid].x = MAX_FLOAT;
-    mini[tid].y = __int_as_float(tid);
+    mini[tid].y = 0;
 
     if (surfaceIdx < n) {
         // Data load
         float intensity = intensities[surfaceIdx];
         float4 surfel = surfels[surfaceIdx];
+
+        int ex = 32767*((surfel.x-minx)/(rangex*w));
+        int ey = 32767*((surfel.y-miny)/(rangey*h));
+        mini[tid].y = __int_as_float((ex<<15)|ey);
 
         // Computation
         float Lx = rangex*blockIdx.y + minx - surfel.x;

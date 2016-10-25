@@ -29,9 +29,11 @@ uniform vec4 KellyColors[NUM_KELLY_COLORS] = vec4[NUM_KELLY_COLORS](
     vec4(35, 44, 22, 128)/255
 );
 void main() {
-    int idx = floatBitsToInt(texture(buffer, st).y)%NUM_KELLY_COLORS;
+    int coords = floatBitsToInt(texture(buffer, st).y);
+    int xx = (coords>>15)&32767;
+    int yy = coords&32767;
     float v = texture(buffer, st).x*exposure;
     float a = texture(aux, st).x;
     vec4 w = a>0.5?vec4(a,0,0,0):vec4(0,0.5+a,0,0);
-    color = a>0?w:KellyColors[idx];
+    color = a>0?w:vec4(xx/32767., yy/32767., 0, 1);
 };
