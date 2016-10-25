@@ -160,7 +160,7 @@ __global__ void cuCompute(
         float ndotLn = (surfel.z*Lx + surfel.w*Ly)/sqrt(LdotL);
         char occl = lineocclusion(shared_line_occluders, nlines*2, make_float2(surfel.x + surfel.z*EPSILON, surfel.y + surfel.w*EPSILON), p);
         occl *= circleocclusion(ncircles, make_float2(surfel.x + surfel.z*EPSILON, surfel.y + surfel.w*EPSILON), p);
-        mini[tid].x = occl*ndotLn>0?intensity*LdotL/ndotLn:MAX_FLOAT;
+        mini[tid].x = intensity*occl*ndotLn>0?intensity*LdotL/ndotLn:MAX_FLOAT;
     }
     __syncthreads();
 
