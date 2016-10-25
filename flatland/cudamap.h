@@ -7,8 +7,13 @@ typedef struct {
     // Device pointers
     float* d_intensities;
     float4* d_surfels;
+    float4* d_line_occluders;
+    float4* d_circle_occluders;
     float2* d_field;
     cudaArray* d_field_tex;
+
+    // Occluder counts
+    int nlines, ncircles;
 
     // Data bounds
     int n;
@@ -16,7 +21,7 @@ typedef struct {
     float maxx, maxy, minx, miny;
 } Cudamap;
 
-extern "C" void Cudamap_init(Cudamap* cudamap, float* surfels);
+extern "C" void Cudamap_init(Cudamap* cudamap, float* surfels, float* line_occluders=NULL, float* circle_occluders=NULL);
 extern "C" void Cudamap_setGLTexture(Cudamap* cudamap, unsigned int tex);
 extern "C" void Cudamap_setGLBuffer(Cudamap* cudamap, unsigned int pbo);
 extern "C" void Cudamap_free(Cudamap* cudamap);

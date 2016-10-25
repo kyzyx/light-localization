@@ -81,7 +81,16 @@ class Scene {
             cm.minx = minp[0];
             cm.miny = minp[1];
             cm.n = surfels.size()/4;
-            Cudamap_init(&cm, surfels.data());
+            cm.nlines = lines.size();
+            cm.ncircles = 0;
+            vector<float> linedata;
+            for (int i = 0; i < cm.nlines; i++) {
+                linedata.push_back(lines[i].p1[0]);
+                linedata.push_back(lines[i].p1[1]);
+                linedata.push_back(lines[i].p2[0]);
+                linedata.push_back(lines[i].p2[1]);
+            }
+            Cudamap_init(&cm, surfels.data(), linedata.data());
         }
         void setCudaGLTexture(GLuint tex) {
             Cudamap_setGLTexture(&cm, tex);

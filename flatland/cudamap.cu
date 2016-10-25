@@ -28,10 +28,40 @@ __device__ static float2 atomicMin2(float2* address, float2 val)
     return _ll_float2(old);
 }
 
-__global__ void cuAddlight(float* intensities, float4* surfels, float intensity, float x, float y, int n)
+__device__ static float ccw(float2 a, float2 b, float2 c) {
+    return (b.x - a.x)*(c.y - a.y) - (c.x - a.x)*(b.y - a.y);
+}
+__device__ static char intersects(float2 a, float2 b, float2 c, float2 d) {
+    char v1 = ccw(a, b, c)*ccw(a, b, d) > 0?0:1;
+    char v2 = ccw(c, d, a)*ccw(c, d, b) > 0?0:1;
+    return v1*v2;
+}
+__device__ static char lineocclusion(float2* line_occluders, int nlines, float2 a, float2 b) {
+    char v = 1;
+    for (int i = 0; i < nlines; i+=2) {
+        v *= (1-intersects(line_occluders[i], line_occluders[i+1], a, b));
+    }
+    return v;
+}
+
+__global__ void cuAddlight(
+        float* intensities,
+        float4* surfels,
+        float4* line_occluders, int nlines,
+        float intensity, float x, float y, int n)
 {
+    __shared__ float2 shared_line_occluders[128];
+
     int tid = threadIdx.x;
     int surfaceIdx = tid + blockDim.x*blockIdx.x;
+
+    if (tid < nlines) {
+        float4 line = line_occluders[tid];
+        shared_line_occluders[2*tid] = make_float2(line.x, line.y);
+        shared_line_occluders[2*tid+1] = make_float2(line.z, line.w);
+    }
+    __syncthreads();
+
     if (surfaceIdx < n) {
         float4 surfel = surfels[surfaceIdx];
 
@@ -40,13 +70,29 @@ __global__ void cuAddlight(float* intensities, float4* surfels, float intensity,
         float LdotL = L.x*L.x+L.y*L.y;
         float ndotL = fmaxf(surfel.z*L.x+surfel.w*L.y,0.f);
         float ret = LdotL>0?ndotL*intensity/(LdotL*sqrt(LdotL)):0;
-        atomicAdd(intensities+surfaceIdx, ret);
+        char occl = lineocclusion(shared_line_occluders, nlines*2, make_float2(surfel.x, surfel.y), make_float2(x,y));
+        atomicAdd(intensities+surfaceIdx, ret*occl);
     }
 }
-__global__ void cuAddDirectionalLight(float* intensities, float4* surfels, float intensity, float x, float y, float nx, float ny, float d, int n)
+__global__ void cuAddDirectionalLight(
+        float* intensities,
+        float4* surfels,
+        float4* line_occluders, int nlines,
+        float intensity, float x, float y,
+        float nx, float ny, float d, int n)
 {
+    __shared__ float2 shared_line_occluders[128];
+
     int tid = threadIdx.x;
     int surfaceIdx = tid + blockDim.x*blockIdx.x;
+
+    if (tid < nlines) {
+        float4 line = line_occluders[tid];
+        shared_line_occluders[2*tid] = make_float2(line.x, line.y);
+        shared_line_occluders[2*tid+1] = make_float2(line.z, line.w);
+    }
+    __syncthreads();
+
     if (surfaceIdx < n) {
         float4 surfel = surfels[surfaceIdx];
 
@@ -61,7 +107,8 @@ __global__ void cuAddDirectionalLight(float* intensities, float4* surfels, float
         float ct = -(L.x*nx + L.y*ny)/mag;
         float scaling = ct>0?pow(ct, d):0;
         float ret = LdotL>0?ndotL*intensity*scaling/(LdotL*mag):0;
-        atomicAdd(intensities+surfaceIdx, ret);
+        char occl = lineocclusion(shared_line_occluders, nlines*2, make_float2(surfel.x, surfel.y), make_float2(x,y));
+        atomicAdd(intensities+surfaceIdx, ret*occl);
     }
 }
 
@@ -69,6 +116,10 @@ template <unsigned int blockSize>
 __global__ void cuCompute(
         float* intensities,
         float4* surfels,
+        float4* line_occluders,
+        int nlines,
+        float4* circle_occluders,
+        int ncircles,
         int n,
         float2* field,
         int w, int h,
@@ -76,10 +127,18 @@ __global__ void cuCompute(
         )
 {
     __shared__ float2 mini[BLOCK_SIZE];
+    __shared__ float2 shared_line_occluders[128];
 
     int tid = threadIdx.x;
     int surfaceIdx = tid + blockDim.x*blockIdx.x;
     mini[tid] = make_float2(MAX_FLOAT, 0);
+
+    if (tid < nlines) {
+        float4 line = line_occluders[tid];
+        shared_line_occluders[2*tid] = make_float2(line.x, line.y);
+        shared_line_occluders[2*tid+1] = make_float2(line.z, line.w);
+    }
+    __syncthreads();
 
     if (surfaceIdx < n) {
         // Data load
@@ -96,7 +155,8 @@ __global__ void cuCompute(
         float Ly = p.y - surfel.y;
         float LdotL = Lx*Lx + Ly*Ly;
         float ndotLn = (surfel.z*Lx + surfel.w*Ly)/sqrt(LdotL);
-        mini[tid].x = ndotLn>0?intensity*LdotL/ndotLn:MAX_FLOAT;
+        char occl = lineocclusion(shared_line_occluders, nlines*2, make_float2(surfel.x, surfel.y), p);
+        mini[tid].x = occl*ndotLn>0?intensity*LdotL/ndotLn:MAX_FLOAT;
     }
     __syncthreads();
 
@@ -144,13 +204,17 @@ __global__ void cuCompute(
     }
 }
 
-void Cudamap_init(Cudamap* cudamap, float* surfels) {
+void Cudamap_init(Cudamap* cudamap, float* surfels, float* line_occluders, float* circle_occluders) {
     cudaSetDevice(0);
     cudaMalloc((void**) &(cudamap->d_intensities), sizeof(float)*cudamap->n);
     cudaMalloc((void**) &(cudamap->d_surfels), sizeof(float4)*cudamap->n);
     cudaMalloc((void**) &(cudamap->d_field), sizeof(float2)*cudamap->w*cudamap->h);
+    cudaMalloc((void**) &(cudamap->d_line_occluders), sizeof(float4)*cudamap->nlines);
+    cudaMalloc((void**) &(cudamap->d_circle_occluders), sizeof(float4)*cudamap->ncircles);
 
     cudaMemcpy(cudamap->d_surfels, surfels, sizeof(float4)*cudamap->n, cudaMemcpyHostToDevice);
+    if (cudamap->nlines) cudaMemcpy(cudamap->d_line_occluders, line_occluders, sizeof(float4)*cudamap->nlines, cudaMemcpyHostToDevice);
+    if (cudamap->ncircles) cudaMemcpy(cudamap->d_circle_occluders, circle_occluders, sizeof(float4)*cudamap->ncircles, cudaMemcpyHostToDevice);
     cudaMemset((void*) cudamap->d_intensities, 0, sizeof(float)*cudamap->n);
 }
 
@@ -197,14 +261,14 @@ void Cudamap_setIntensities(Cudamap* cudamap, float* intensities) {
 
 void Cudamap_addLight(Cudamap* cudamap, float intensity, float x, float y) {
     cuAddlight<<< (cudamap->n+BLOCK_SIZE-1)/BLOCK_SIZE, BLOCK_SIZE >>>(
-            cudamap->d_intensities, cudamap->d_surfels, intensity, x, y, cudamap->n);
+            cudamap->d_intensities, cudamap->d_surfels, cudamap->d_line_occluders, cudamap->nlines, intensity, x, y, cudamap->n);
 }
 void Cudamap_addDirectionalLight(Cudamap* cudamap, float intensity, float x, float y, float fx, float fy) {
     float dx = fx - x;
     float dy = fy - y;
     float d = sqrt(dx*dx + dy*dy);
     cuAddDirectionalLight<<< (cudamap->n+BLOCK_SIZE-1)/BLOCK_SIZE, BLOCK_SIZE >>>(
-            cudamap->d_intensities, cudamap->d_surfels, intensity, x, y, fx/d, fy/d, d, cudamap->n);
+            cudamap->d_intensities, cudamap->d_surfels, cudamap->d_line_occluders, cudamap->nlines, intensity, x, y, fx/d, fy/d, d, cudamap->n);
 }
 
 void Cudamap_compute(Cudamap* cudamap, float* field)
@@ -230,6 +294,10 @@ void Cudamap_compute(Cudamap* cudamap, float* field)
     cuCompute<BLOCK_SIZE><<< blocks, threads >>>(
             cudamap->d_intensities,
             cudamap->d_surfels,
+            cudamap->d_line_occluders,
+            cudamap->nlines,
+            cudamap->d_circle_occluders,
+            cudamap->ncircles,
             n, cudamap->d_field, w, h,
             rangex, rangey, cudamap->minx, cudamap->miny
             );
