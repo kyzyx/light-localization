@@ -607,7 +607,17 @@ int main(int argc, char** argv) {
     currprog = 0;
 
     if (argc > 1) {
-        s.addCircle(Vector2f(0,0), 1.0f, 0.007f);
+        if (strcmp(argv[1], "-circle") == 0) {
+            s.addCircle(Vector2f(0,0), 1.0f, 0.007f);
+        } else if (strcmp(argv[1], "-Lroom") == 0) {
+            s.addSegment(Line(Vector2f(-1.01, 1), Vector2f(1.01, 1)));
+            s.addSegment(Line(Vector2f(1, 1.01), Vector2f(1, -1.01)));
+            s.addSegment(Line(Vector2f(1.01, -1), Vector2f(-0.01, -1)));
+            s.addSegment(Line(Vector2f(0, -1.01), Vector2f(0, 0)));
+            s.addSegment(Line(Vector2f(0, 0), Vector2f(-1.01, 0)));
+            s.addSegment(Line(Vector2f(-1, -0.01), Vector2f(-1, 1.01)));
+            s.rasterize(240, 240); // Note: number of surfels should be slightly less than a multiple of 512 (block size)
+        }
     } else {
         s.addSegment(Line(Vector2f(-1, -1.01), Vector2f(-1, 1.01)));
         s.addSegment(Line(Vector2f(-1.01, 1), Vector2f(1.01, 1)));
