@@ -15,7 +15,7 @@ using namespace Eigen;
 
 class Scene {
     public:
-        Scene() : minp(Vector2f(0,0)), maxp(Vector2f(0,0)) { }
+        Scene() : minp(Vector2f(0,0)), maxp(Vector2f(0,0)), ncircles(0) { }
         ~Scene() { Cudamap_free(&cm); }
         void addSegment(Line l) {
             extendBbox(l.p1);
@@ -71,6 +71,7 @@ class Scene {
                 surfels.push_back(-n[0]);
                 surfels.push_back(-n[1]);
             }
+            ncircles++;
         }
         void initCuda(int w, int h) {
             cm.w = w;
@@ -82,7 +83,7 @@ class Scene {
             cm.miny = minp[1];
             cm.n = surfels.size()/4;
             cm.nlines = lines.size();
-            cm.ncircles = 0;
+            cm.ncircles = ncircles;
             vector<float> linedata;
             for (int i = 0; i < cm.nlines; i++) {
                 linedata.push_back(lines[i].p1[0]);
@@ -232,6 +233,7 @@ class Scene {
 
         Vector2f minp, maxp;
         vector<Line> lines;
+        int ncircles;
         vector<Vector3f> lights;
         vector<float> directions;
         vector<float> falloffs;

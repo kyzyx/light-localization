@@ -43,6 +43,11 @@ __device__ static char lineocclusion(float2* line_occluders, int nlines, float2 
     }
     return v;
 }
+__device__ static char circleocclusion(int ncircles, float2 a, float2 b) {
+    char r1 = (a.x*a.x + a.y*a.y > 1)?0:1;
+    char r2 = (b.x*b.x + b.y*b.y > 1)?0:-1;
+    return (r1 + r2 == 0)?1:(1-ncircles);
+}
 
 const float EPSILON = 1e-5;
 
@@ -154,6 +159,7 @@ __global__ void cuCompute(
         float LdotL = Lx*Lx + Ly*Ly;
         float ndotLn = (surfel.z*Lx + surfel.w*Ly)/sqrt(LdotL);
         char occl = lineocclusion(shared_line_occluders, nlines*2, make_float2(surfel.x + surfel.z*EPSILON, surfel.y + surfel.w*EPSILON), p);
+        occl *= circleocclusion(ncircles, make_float2(surfel.x + surfel.z*EPSILON, surfel.y + surfel.w*EPSILON), p);
         mini[tid].x = occl*ndotLn>0?intensity*LdotL/ndotLn:MAX_FLOAT;
     }
     __syncthreads();
