@@ -255,11 +255,12 @@ GLuint rfr_tex, rfr_fbo_z, rfr_fbo;
 int currprog;
 enum {
     PROG_ID = 0,
-    PROG_GRAD = 1,
-    PROG_LAPLACIAN = 2,
-    PROG_LOCALMIN = 3,
-    PROG_SOURCEMAP = 4,
-    NUM_PROGS
+    PROG_SOURCEMAP = 1,
+    PROG_MEDIALAXIS = 2,
+    PROG_GRAD = 3,
+    PROG_LAPLACIAN = 4,
+    NUM_PROGS,
+    PROG_LOCALMIN = 10,
 };
 GLuint progs[NUM_PROGS];
 
@@ -459,7 +460,7 @@ void draw() {
     //glBindTexture(GL_TEXTURE_BUFFER,tbo_tex);
     //glTexBuffer(GL_TEXTURE_BUFFER,GL_R32F,pbo);
     //
-    if (currprog == PROG_SOURCEMAP) {
+    if (currprog == PROG_SOURCEMAP || currprog == PROG_MEDIALAXIS) {
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     } else {
@@ -550,6 +551,7 @@ void setupProg(const char* fshader, int n) {
     glUniform1i(glGetUniformLocation(progs[n], "aux"), 1);
     glUniform2i(glGetUniformLocation(progs[n], "dim"), width, height);
     glUniform1f(glGetUniformLocation(progs[n], "exposure"), 0.5);
+    glUniform1i(glGetUniformLocation(progs[n], "threshold"), 8);
 }
 
 void setupFullscreenQuad() {
@@ -602,8 +604,9 @@ int main(int argc, char** argv) {
     setupProg("tboshader.f.glsl",PROG_ID);
     setupProg("grad.f.glsl",PROG_GRAD);
     setupProg("grad.f.glsl",PROG_LAPLACIAN);
-    setupProg("localmin.f.glsl",PROG_LOCALMIN);
+    //setupProg("localmin.f.glsl",PROG_LOCALMIN);
     setupProg("sourcemap.f.glsl",PROG_SOURCEMAP);
+    setupProg("medialaxis.f.glsl",PROG_MEDIALAXIS);
     currprog = 0;
 
     if (argc > 1) {

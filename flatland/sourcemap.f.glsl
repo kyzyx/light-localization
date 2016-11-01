@@ -35,5 +35,6 @@ void main() {
     float v = texture(buffer, st).x*exposure;
     float a = texture(aux, st).x;
     vec4 w = a>0.5?vec4(a,0,0,0):vec4(0,0.5+a,0,0);
-    color = a>0?w:vec4(xx/32767., yy/32767., 0, 1);
+    // color = a>0?w:vec4(xx/32767., yy/32767., 0, 1);
+    color = a>0?w:vec4(coords/1024., (1024-coords)/1024., 0, 1);
 };

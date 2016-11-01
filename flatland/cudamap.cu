@@ -148,9 +148,10 @@ __global__ void cuCompute(
         float intensity = intensities[surfaceIdx];
         float4 surfel = surfels[surfaceIdx];
 
-        int ex = 32767*((surfel.x-minx)/(rangex*w));
-        int ey = 32767*((surfel.y-miny)/(rangey*h));
-        mini[tid].y = __int_as_float((ex<<15)|ey);
+        /*int ex = 32767*((surfel.x-minx)/(rangex*w));*/
+        /*int ey = 32767*((surfel.y-miny)/(rangey*h));*/
+        /*mini[tid].y = __int_as_float((ex<<15)|ey);*/
+        mini[tid].y = __int_as_float(surfaceIdx);
 
         // Computation
         float2 p = make_float2(rangex*blockIdx.y + minx, rangey*blockIdx.z + miny);
