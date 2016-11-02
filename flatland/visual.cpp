@@ -93,6 +93,9 @@ class Scene {
             }
             Cudamap_init(&cm, surfels.data(), linedata.data());
         }
+        int numSurfels() const {
+            return surfels.size()/4;
+        }
         void setCudaGLTexture(GLuint tex) {
             Cudamap_setGLTexture(&cm, tex);
         }
@@ -463,6 +466,7 @@ void draw() {
     if (currprog == PROG_SOURCEMAP || currprog == PROG_MEDIALAXIS) {
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glUniform1i(glGetUniformLocation(progs[currprog], "maxidx"), s.numSurfels());
     } else {
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
