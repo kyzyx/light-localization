@@ -3,7 +3,7 @@
 #include <stdio.h>
 
 #define BLOCK_SIZE 512
-#define MAX_FLOAT 1e4
+#define MAX_FLOAT 1e9
 
 __device__ static float2 cmpVI(float2 a, float2 b) {
     return a.x<b.x?a:b;

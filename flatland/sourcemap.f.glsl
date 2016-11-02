@@ -5,6 +5,8 @@ uniform sampler2D buffer;
 uniform sampler2D aux;
 uniform ivec2 dim;
 uniform float exposure;
+uniform int maxidx;
+
 const int NUM_KELLY_COLORS = 20;
 uniform vec4 KellyColors[NUM_KELLY_COLORS] = vec4[NUM_KELLY_COLORS](
     vec4(255, 179, 0, 128)/255,
@@ -28,13 +30,16 @@ uniform vec4 KellyColors[NUM_KELLY_COLORS] = vec4[NUM_KELLY_COLORS](
     vec4(241, 58, 19, 128)/255,
     vec4(35, 44, 22, 128)/255
 );
+
+const float PI = 3.1415926536;
+const float MAX_FLOAT = 1e9;
+
 void main() {
-    int coords = floatBitsToInt(texture(buffer, st).y);
-    int xx = (coords>>15)&32767;
-    int yy = coords&32767;
-    float v = texture(buffer, st).x*exposure;
+    vec4 m = texture(buffer, st);
+    float c = 2 * PI * floatBitsToInt(m.y) / float(maxidx);
+    vec4 mappedcolor = m.x>=MAX_FLOAT?vec4(0,0,0,1):0.5*vec4(sin(c), sin(c+2*PI/3), sin(c+4*PI/3), 1)+0.5;
+
     float a = texture(aux, st).x;
     vec4 w = a>0.5?vec4(a,0,0,0):vec4(0,0.5+a,0,0);
-    // color = a>0?w:vec4(xx/32767., yy/32767., 0, 1);
-    color = a>0?w:vec4(coords/1024., (1024-coords)/1024., 0, 1);
+    color = a>0?w:mappedcolor;
 };
