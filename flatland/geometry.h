@@ -14,6 +14,9 @@ class Line {
         Eigen::Vector2f vec() const {
             return (p2-p1).normalized();
         }
+        float length() const {
+            return (p2-p1).norm();
+        }
         Eigen::Vector2f normal() const {
             Eigen::Vector2f v = (p2-p1).normalized();
             return Eigen::Vector2f(v[1], -v[0]);

@@ -17,48 +17,22 @@ class Scene {
     public:
         Scene() : minp(Vector2f(0,0)), maxp(Vector2f(0,0)), ncircles(0) { }
         ~Scene() { Cudamap_free(&cm); }
-        void addSegment(Line l) {
+
+        // --------- Geometry Manipulation ---------
+        void addSegment(Line l, float res=0.01) {
             extendBbox(l.p1);
             extendBbox(l.p2);
+            Vector2f v = l.vec();
+            float d = l.length();
+            Vector2f n = l.normal();
+            for (float i = 0; i < d; i+= res) {
+                Vector2f p = l.p1 + i*v;
+                surfels.push_back(p[0]);
+                surfels.push_back(p[1]);
+                surfels.push_back(n[0]);
+                surfels.push_back(n[1]);
+            }
             lines.push_back(l);
-        }
-        int intersectsAny(Line a) {
-            for (int i = 0; i < lines.size(); i++) {
-                if (intersects(lines[i],a)) {
-                    return i+1;
-                }
-            }
-            return 0;
-        }
-        void rasterize(int w, int h) {
-            for (int i = 0; i < lines.size(); i++) {
-                Line l = lines[i];
-                int x0, y0, x1, y1;
-                world2clip(l.p1, x0, y0, w, h);
-                world2clip(l.p2, x1, y1, w, h);
-
-                int dx = abs(x1-x0), sx = x0<x1 ? 1 : -1;
-                int dy = abs(y1-y0), sy = y0<y1 ? 1 : -1;
-                int err = (dx>dy ? dx : -dy)/2;
-                int e2;
-
-                while(1) {
-                    Vector2f n = l.normal();
-                    Vector2f p = projectPointToLine(clip2world(x0, y0, w, h),l);
-                    lineid.push_back(i);
-                    coords.push_back(x0);
-                    coords.push_back(y0);
-                    surfels.push_back(p[0]);
-                    surfels.push_back(p[1]);
-                    surfels.push_back(n[0]);
-                    surfels.push_back(n[1]);
-                    intensities.push_back(0);
-                    if (x0==x1 && y0==y1) break;
-                    e2 = err;
-                    if (e2 >-dx) { err -= dy; x0 += sx; }
-                    if (e2 < dy) { err += dx; y0 += sy; }
-                }
-            }
         }
         void addCircle(Vector2f o, float r, float res=0.01) {
             extendBbox(o+Vector2f(r,r));
@@ -73,6 +47,11 @@ class Scene {
             }
             ncircles++;
         }
+        int numSurfels() const {
+            return surfels.size()/4;
+        }
+
+        // --------- CUDA Setup ---------
         void initCuda(int w, int h) {
             cm.w = w;
             cm.h = h;
@@ -93,23 +72,24 @@ class Scene {
             }
             Cudamap_init(&cm, surfels.data(), linedata.data());
         }
-        int numSurfels() const {
-            return surfels.size()/4;
-        }
         void setCudaGLTexture(GLuint tex) {
             Cudamap_setGLTexture(&cm, tex);
         }
         void setCudaGLBuffer(GLuint pbo) {
             Cudamap_setGLBuffer(&cm, pbo);
         }
+        void computeField() {
+            Cudamap_compute(&cm, field);
+        }
 
+        // --------- Light Manipulation ---------
         int numLights() const {
             return lights.size();
         }
         Vector3f getLight(int idx) const {
             return lights[idx];
         }
-        float getAngle(int idx) const {
+        float getLightAngle(int idx) const {
             return directions[idx];
         }
         void addLightWithSymmetry(float intensity, int i) {
@@ -210,9 +190,8 @@ class Scene {
             falloffs.push_back(falloff);
             symmetries.push_back(0);
         }
-        void computeField() {
-            Cudamap_compute(&cm, field);
-        }
+
+        // --------- Coordinate System Utilities ---------
         Vector2f clip2world(int x, int y, int w, int h) {
             Vector2f v = maxp - minp;
             v[0] *= (x+1.5)/((float)w-2);
@@ -235,8 +214,11 @@ class Scene {
         }
 
         Vector2f minp, maxp;
+
+        vector<float> surfels;
         vector<Line> lines;
         int ncircles;
+
         vector<Vector3f> lights;
         vector<float> directions;
         vector<float> falloffs;
@@ -244,10 +226,6 @@ class Scene {
 
         Cudamap cm;
         float* field;
-        vector<float> surfels;
-        vector<int> coords;
-        vector<int> lineid;
-        vector<float> intensities;
 };
 
 Scene s;
@@ -310,7 +288,7 @@ void rerasterizeLights() {
     for (int i = 0; i < s.numLights(); i++) {
         Vector2f p = s.getLight(i).head(2);
         s.world2clip(p, ix, iy, width*displayscale, height*displayscale);
-        float a = s.getAngle(i);
+        float a = s.getLightAngle(i);
         if (selectedlight == i) {
             rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 1.f);
             if (a >= 0) {
@@ -387,7 +365,7 @@ void keydown(unsigned char key, int x, int y) {
         float intensity = s.getLight(selectedlight)[2];
         s.changeIntensity(selectedlight, intensity+0.1);
     } else if (key == 'q' && selectedlight >= 0) {
-        float a = s.getAngle(selectedlight);
+        float a = s.getLightAngle(selectedlight);
         if (a < 0) {
             s.addSymmetry(selectedlight, 1);
         } else {
@@ -397,7 +375,7 @@ void keydown(unsigned char key, int x, int y) {
         }
         rerasterizeLights();
     } else if (key == 'w' && selectedlight >= 0) {
-        float a = s.getAngle(selectedlight);
+        float a = s.getLightAngle(selectedlight);
         if (a < 0) {
             s.addSymmetry(selectedlight, 2);
         } else {
@@ -407,7 +385,7 @@ void keydown(unsigned char key, int x, int y) {
         }
         rerasterizeLights();
     } else if (key == 'e' && selectedlight >= 0) {
-        float a = s.getAngle(selectedlight);
+        float a = s.getLightAngle(selectedlight);
         if (a < 0) {
             s.addSymmetry(selectedlight, 4);
             rerasterizeLights();
@@ -623,7 +601,6 @@ int main(int argc, char** argv) {
             s.addSegment(Line(Vector2f(0, -1.01), Vector2f(0, 0)));
             s.addSegment(Line(Vector2f(0, 0), Vector2f(-1.01, 0)));
             s.addSegment(Line(Vector2f(-1, -0.01), Vector2f(-1, 1.01)));
-            s.rasterize(240, 240); // Note: number of surfels should be slightly less than a multiple of 512 (block size)
         } else if (strcmp(argv[1], "-star") == 0) {
             s.addSegment(Line(Vector2f(-1, 0), Vector2f(-0.2, 0.2)));
             s.addSegment(Line(Vector2f(-0.2, 0.2), Vector2f(0, 1)));
@@ -633,14 +610,12 @@ int main(int argc, char** argv) {
             s.addSegment(Line(Vector2f(0.2, -0.2), Vector2f(0, -1)));
             s.addSegment(Line(Vector2f(0, -1), Vector2f(-0.2, -0.2)));
             s.addSegment(Line(Vector2f(-0.2, -0.2), Vector2f(-1, 0)));
-            s.rasterize(240, 240); // Note: number of surfels should be slightly less than a multiple of 512 (block size)
         }
     } else {
         s.addSegment(Line(Vector2f(-1, -1.01), Vector2f(-1, 1.01)));
         s.addSegment(Line(Vector2f(-1.01, 1), Vector2f(1.01, 1)));
         s.addSegment(Line(Vector2f(1, 1.01), Vector2f(1, -1.01)));
         s.addSegment(Line(Vector2f(1.01, -1), Vector2f(-1.01, -1)));
-        s.rasterize(240, 240); // Note: number of surfels should be slightly less than a multiple of 512 (block size)
     }
 
     s.initCuda(width, height);
