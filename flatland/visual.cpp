@@ -34,7 +34,7 @@ class Scene {
             }
             lines.push_back(l);
         }
-        void addCircle(Vector2f o, float r, float res=0.01) {
+        void addCircle(Vector2f o, float r, float res=0.01, bool flip=false) {
             extendBbox(o+Vector2f(r,r));
             extendBbox(o-Vector2f(r,r));
             float ares = asin(res/r);
@@ -42,8 +42,8 @@ class Scene {
                 Vector2f n = sin(a)*Vector2f(0,1) + cos(a)*Vector2f(1,0);
                 surfels.push_back(o[0] + n[0]*r);
                 surfels.push_back(o[1] + n[1]*r);
-                surfels.push_back(-n[0]);
-                surfels.push_back(-n[1]);
+                surfels.push_back(flip?n[0]:-n[0]);
+                surfels.push_back(flip?n[1]:-n[1]);
             }
             ncircles++;
         }
