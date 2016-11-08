@@ -9,7 +9,7 @@
 #include "options.h"
 #include "fileio.h"
 
-const int displayscale = 4;
+int displayscale = 4;
 int width = 200;
 int height = 200;
 unsigned char* imagedata;
@@ -450,7 +450,7 @@ void mousemove(int x, int y) {
 void draw() {
     if (shouldWritePlyFile) {
         s.computeField(distancefield);
-        outputPLY(plyFilename.c_str(), distancefield, width, height);
+        outputPLY(plyFilename.c_str(), distancefield, width, height, displayscale==1?auxlayer:NULL);
         shouldWritePlyFile = false;
     } else {
         s.computeField();
@@ -610,6 +610,10 @@ int main(int argc, char** argv) {
     if (options[RESOLUTION]) {
         width = atoi(options[RESOLUTION].arg);
         height = width;
+        displayscale = 900/width;
+    }
+    if (options[DISPLAYSCALE]) {
+        displayscale = atoi(options[DISPLAYSCALE].arg);
     }
 
     setupWindow(argc, argv, width*displayscale, height*displayscale);

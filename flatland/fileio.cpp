@@ -93,7 +93,11 @@ bool outputPNG(const char* filename,
     return true;
 }
 
-void outputPLY(const char* filename, float* data, int width, int height) {
+int f2c(float f) {
+    return std::min(std::max(f*255,0.f),255.f);
+}
+
+void outputPLY(const char* filename, float* data, int width, int height, float* colors) {
     static int filenum = 0;
     char* fmtfilename = new char[strlen(filename) + 4];
     sprintf(fmtfilename, filename, filenum++);
@@ -108,12 +112,18 @@ void outputPLY(const char* filename, float* data, int width, int height) {
     out << "ply\nformat ascii 1.0\n";
     out << "element vertex " << (width*height) << "\n";
     out << "property float x\nproperty float y\nproperty float z\n";
-    //out << "property uchar red\nproperty uchar green\nproperty uchar blue\n";
+    if (colors) out << "property uchar red\nproperty uchar green\nproperty uchar blue\n";
     out << "element face " << (2*(width-1)*(height-1)) << std::endl;
     out << "property list uchar int vertex_indices" << std::endl;
     out << "end_header" << std::endl;
     for (int i = 0; i < width*height; i++) {
-        out << (i%width) << " " << (i/width) << " " << width*data[2*i]/maxval << std::endl;
+        out << (i%width) << " " << (i/width) << " " << width*data[2*i]/maxval;
+        //if (colors) out << f2c(colors[3*i]) << " " <<  f2c(colors[3*i+1]) << " " <<  f2c(colors[3*i+2]) << std::endl;
+        if (colors) {
+            if (colors[i] > 0) out << " " << (255-f2c(colors[i])) << " 0 0";
+            else out << " 200 200 200";
+        }
+        out << std::endl;
     }
     for (int i = 0; i < (width-1)*(height-1); i++) {
         int x = i%(width-1);
