@@ -7,10 +7,13 @@
 #include "geometry.h"
 #include "cudamap.h"
 #include "options.h"
+#include "fileio.h"
 
 const int displayscale = 4;
 int width = 200;
 int height = 200;
+unsigned char* imagedata;
+float* distancefield;
 
 using namespace std;
 using namespace Eigen;
@@ -80,8 +83,8 @@ class Scene {
         void setCudaGLBuffer(GLuint pbo) {
             Cudamap_setGLBuffer(&cm, pbo);
         }
-        void computeField() {
-            Cudamap_compute(&cm, field);
+        void computeField(float* distancefield=NULL) {
+            Cudamap_compute(&cm, distancefield?distancefield:field);
         }
 
         // --------- Light Manipulation ---------
@@ -346,6 +349,11 @@ void selectLight(int i) {
     selectedlight = i;
 }
 
+bool shouldExitImmediately = false;
+bool shouldWritePngFile = false;
+bool shouldWritePlyFile = false;
+string pngFilename, plyFilename;
+
 void keydown(unsigned char key, int x, int y) {
     if (key == ',') {
         GLuint loc = glGetUniformLocation(progs[currprog], "exposure");
@@ -360,6 +368,9 @@ void keydown(unsigned char key, int x, int y) {
         glUniform1f(loc, exposure+0.05);
     } else if (key == 'm') {
         currprog = (currprog+1)%NUM_PROGS;
+    } else if (key == ' ') {
+        if (pngFilename.length()) shouldWritePngFile = true;
+        if (plyFilename.length()) shouldWritePlyFile = true;
     } else if (key == '[' && selectedlight >= 0) {
         float intensity = s.getLight(selectedlight)[2];
         if (intensity > 0.1) s.changeIntensity(selectedlight, intensity-0.1);
@@ -435,8 +446,15 @@ void mousemove(int x, int y) {
         rerasterizeLights();
     }
 }
+
 void draw() {
-    s.computeField();
+    if (shouldWritePlyFile) {
+        s.computeField(distancefield);
+        outputPLY(plyFilename.c_str(), distancefield, width, height);
+        shouldWritePlyFile = false;
+    } else {
+        s.computeField();
+    }
     glBindVertexArray(vao);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, tex);
@@ -460,6 +478,9 @@ void draw() {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, rfr_tex);
+    } else {
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, tex);
     }
     glUseProgram(progs[currprog]);
     glActiveTexture(GL_TEXTURE1);
@@ -470,6 +491,14 @@ void draw() {
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, 0);
     glBindVertexArray(0);
+    if (shouldWritePngFile) {
+        glReadPixels(0,0,width*displayscale, height*displayscale, GL_RGB, GL_UNSIGNED_BYTE, (void*) imagedata);
+        outputPNG(pngFilename.c_str(), imagedata, width*displayscale, height*displayscale);
+        shouldWritePngFile = false;
+    }
+    if (shouldExitImmediately) {
+        exit(0);
+    }
     glutSwapBuffers();
 }
 
@@ -584,6 +613,8 @@ int main(int argc, char** argv) {
     }
 
     setupWindow(argc, argv, width*displayscale, height*displayscale);
+    imagedata = new unsigned char[3*width*height*displayscale*displayscale];
+    distancefield = new float[2*width*height];
     auxlayer = new float[width*height*displayscale*displayscale];
     memset(auxlayer, 0, width*height*displayscale*displayscale*sizeof(float));
     glGenTextures(1, &auxtex);
@@ -644,6 +675,17 @@ int main(int argc, char** argv) {
         s.addLight(0,0);
     }
 
+    if (options[EXIT_IMMEDIATELY]) {
+        shouldExitImmediately = true;
+    }
+    if (options[OUTPUT_IMAGEFILE]) {
+        pngFilename = options[OUTPUT_IMAGEFILE].arg;
+        if (shouldExitImmediately) shouldWritePngFile = true;
+    }
+    if (options[OUTPUT_MESHFILE]) {
+        plyFilename = options[OUTPUT_MESHFILE].arg;
+        if (shouldExitImmediately) shouldWritePlyFile = true;
+    }
 
     rerasterizeLights();
 

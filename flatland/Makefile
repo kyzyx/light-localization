@@ -3,8 +3,8 @@ CPPFLAGS=-std=c++11 -O3
 flatland: main.cpp cudamap.o
 	g++ $(CPPFLAGS) $^ -lcudart -lcuda -o $@
 
-visual: visual.cpp cudamap.o loadshader.o opengl_compat.o
-	g++ $(CPPFLAGS) $^ -lcudart -lcuda -lGL -lGLU -lglut -lGLEW -o $@
+visual: visual.cpp cudamap.o loadshader.o opengl_compat.o fileio.o
+	g++ $(CPPFLAGS) $^ -lcudart -lcuda -lGL -lGLU -lglut -lGLEW -lpng -o $@
 
 cudamap.o: cudamap.h cudamap.cu
 	nvcc cudamap.cu -c -o $@
