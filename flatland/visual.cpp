@@ -5,6 +5,7 @@
 #include "loadshader.h"
 #include "geometry.h"
 #include "cudamap.h"
+#include "options.h"
 
 const int displayscale = 4;
 const int width = 200;
@@ -591,6 +592,12 @@ int main(int argc, char** argv) {
     setupProg("medialaxis.f.glsl",PROG_MEDIALAXIS);
     currprog = 0;
 
+    option::Stats stats(usage, argc-1, argv+1);
+    option::Option options[stats.options_max], buffer[stats.buffer_max];
+    option::Parser parse(usage, argc-1, argv+1, options, buffer);
+    if (parse.error()) {
+        option::printUsage(cout, usage);
+    }
     if (argc > 1) {
         if (strcmp(argv[1], "-circle") == 0) {
             s.addCircle(Vector2f(0,0), 1.0f, 0.007f);
