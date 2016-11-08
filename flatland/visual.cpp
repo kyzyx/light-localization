@@ -1,6 +1,7 @@
 #include "opengl_compat.h"
 #include <vector>
 #include <iostream>
+#include <fstream>
 
 #include "loadshader.h"
 #include "geometry.h"
@@ -8,8 +9,8 @@
 #include "options.h"
 
 const int displayscale = 4;
-const int width = 200;
-const int height = 200;
+int width = 200;
+int height = 200;
 
 using namespace std;
 using namespace Eigen;
@@ -472,10 +473,10 @@ void draw() {
     glutSwapBuffers();
 }
 
-void setupWindow(int argc, char** argv) {
+void setupWindow(int argc, char** argv, int w, int h) {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
-    glutInitWindowSize(width*displayscale, height*displayscale);
+    glutInitWindowSize(w, h);
     glutCreateWindow("Light Localization");
     glutDisplayFunc(draw);
     glutIdleFunc(draw);
@@ -570,7 +571,19 @@ void setupFullscreenQuad() {
 }
 
 int main(int argc, char** argv) {
-    setupWindow(argc, argv);
+    option::Stats stats(usage, argc-1, argv+1);
+    option::Option options[stats.options_max], buffer[stats.buffer_max];
+    option::Parser parse(usage, argc-1, argv+1, options, buffer);
+    if (parse.error()) {
+        option::printUsage(cout, usage);
+        return 1;
+    }
+    if (options[RESOLUTION]) {
+        width = atoi(options[RESOLUTION].arg);
+        height = width;
+    }
+
+    setupWindow(argc, argv, width*displayscale, height*displayscale);
     auxlayer = new float[width*height*displayscale*displayscale];
     memset(auxlayer, 0, width*height*displayscale*displayscale*sizeof(float));
     glGenTextures(1, &auxtex);
@@ -592,44 +605,46 @@ int main(int argc, char** argv) {
     setupProg("medialaxis.f.glsl",PROG_MEDIALAXIS);
     currprog = 0;
 
-    option::Stats stats(usage, argc-1, argv+1);
-    option::Option options[stats.options_max], buffer[stats.buffer_max];
-    option::Parser parse(usage, argc-1, argv+1, options, buffer);
-    if (parse.error()) {
-        option::printUsage(cout, usage);
-    }
-    if (argc > 1) {
-        if (strcmp(argv[1], "-circle") == 0) {
-            s.addCircle(Vector2f(0,0), 1.0f, 0.007f);
-        } else if (strcmp(argv[1], "-Lroom") == 0) {
-            s.addSegment(Line(Vector2f(-1.01, 1), Vector2f(1.01, 1)));
-            s.addSegment(Line(Vector2f(1, 1.01), Vector2f(1, -1.01)));
-            s.addSegment(Line(Vector2f(1.01, -1), Vector2f(-0.01, -1)));
-            s.addSegment(Line(Vector2f(0, -1.01), Vector2f(0, 0)));
-            s.addSegment(Line(Vector2f(0, 0), Vector2f(-1.01, 0)));
-            s.addSegment(Line(Vector2f(-1, -0.01), Vector2f(-1, 1.01)));
-        } else if (strcmp(argv[1], "-star") == 0) {
-            s.addSegment(Line(Vector2f(-1, 0), Vector2f(-0.2, 0.2)));
-            s.addSegment(Line(Vector2f(-0.2, 0.2), Vector2f(0, 1)));
-            s.addSegment(Line(Vector2f(0, 1), Vector2f(0.2, 0.2)));
-            s.addSegment(Line(Vector2f(0.2, 0.2), Vector2f(1, 0)));
-            s.addSegment(Line(Vector2f(1, 0), Vector2f(0.2, -0.2)));
-            s.addSegment(Line(Vector2f(0.2, -0.2), Vector2f(0, -1)));
-            s.addSegment(Line(Vector2f(0, -1), Vector2f(-0.2, -0.2)));
-            s.addSegment(Line(Vector2f(-0.2, -0.2), Vector2f(-1, 0)));
+    if (options[INPUT_SCENEFILE]) {
+        ifstream in(options[INPUT_SCENEFILE].arg);
+        int nsegs, nlights, type;
+        float x, y, z;
+        in >> nsegs >> nlights;
+        for (int i = 0; i < nsegs; i++) {
+            type = 0;
+            //in >> type;
+            if (type == 0) {
+                in >> x >> y;
+                Vector2f v1(x,y);
+                in >> x >> y;
+                Vector2f v2(x,y);
+                s.addSegment(Line(v1,v2));
+            } else {
+                in >> x >> y >> z;
+                s.addCircle(Vector2f(x,y),z);
+            }
+        }
+        s.initCuda(width, height);
+        s.setCudaGLTexture(tex);
+        s.setCudaGLBuffer(pbo);
+        for (int i = 0; i < nlights; i++) {
+            in >> x >> y >> z;
+            s.addLight(x, y, z);
         }
     } else {
-        s.addSegment(Line(Vector2f(-1, -1.01), Vector2f(-1, 1.01)));
-        s.addSegment(Line(Vector2f(-1.01, 1), Vector2f(1.01, 1)));
-        s.addSegment(Line(Vector2f(1, 1.01), Vector2f(1, -1.01)));
-        s.addSegment(Line(Vector2f(1.01, -1), Vector2f(-1.01, -1)));
+        s.addCircle(Vector2f(0,0), 1.0f, 0.007f);
+        //s.addSegment(Line(Vector2f(-1, -1.01), Vector2f(-1, 1.01)));
+        //s.addSegment(Line(Vector2f(-1.01, 1), Vector2f(1.01, 1)));
+        //s.addSegment(Line(Vector2f(1, 1.01), Vector2f(1, -1.01)));
+        //s.addSegment(Line(Vector2f(1.01, -1), Vector2f(-1.01, -1)));
+        s.initCuda(width, height);
+        s.setCudaGLTexture(tex);
+        s.setCudaGLBuffer(pbo);
+
+        s.addLight(0,0);
     }
 
-    s.initCuda(width, height);
-    s.setCudaGLTexture(tex);
-    s.setCudaGLBuffer(pbo);
 
-    s.addLight(0,0);
     rerasterizeLights();
 
     glutMainLoop();
