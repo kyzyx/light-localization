@@ -18,6 +18,31 @@ float* distancefield;
 using namespace std;
 using namespace Eigen;
 
+string helpstring =
+"----- Visualization -----\n" \
+"  [h] - display this help screen\n" \
+"  [,] - decrease exposure\n" \
+"  [.] - increase exposure\n" \
+"  [m] - change visualization mode (RDF, RNF, Medial Axis)\n" \
+"  [p] - print current scene description\n" \
+"  [ ] - save image for current view\n" \
+"----- Mouse -----\n" \
+"  Clicking on an existing light selects it (red).\n" \
+"  Clicking and dragging on an existing light moves it.\n" \
+"  Clicking elsewhere creates a new uniform point light.\n" \
+"  Shift-Clicking elsewhere creates a new directionally-varying light.\n" \
+"----- Modify Selected Light -----\n" \
+"  [[] - decrease selected light intensity\n" \
+"  []] - increase selected light intensity\n" \
+"  [Delete] - remove selected light\n" \
+"----- Modify Selected Directionally-Varying Light -----\n" \
+"  [q] - rotate light clockwise\n" \
+"  [w] - rotate light counterclockwise\n" \
+"----- Add Symmetrical Uniform Point Lights -----\n" \
+"  [q] - add light horizontally symmetric with selected light\n" \
+"  [w] - add light vertically symmetric with selected light\n" \
+"  [e] - add 3 lights horizontally and vertically symmetric with selected light\n";
+
 class Scene {
     public:
         Scene() : minp(Vector2f(0,0)), maxp(Vector2f(0,0)), ncircles(0) { }
@@ -268,9 +293,9 @@ enum {
     PROG_ID = 0,
     PROG_SOURCEMAP = 1,
     PROG_MEDIALAXIS = 2,
+    NUM_PROGS,
     PROG_GRAD = 3,
     PROG_LAPLACIAN = 4,
-    NUM_PROGS,
     PROG_LOCALMIN = 10,
 };
 GLuint progs[NUM_PROGS];
@@ -428,6 +453,8 @@ void keydown(unsigned char key, int x, int y) {
             s.addSymmetry(selectedlight, 4);
             rerasterizeLights();
         }
+    } else if (key == 'h') {
+        cout << helpstring << endl;
     } else if (key == 'p') {
         s.printScene();
     } else if (key == 127 && selectedlight >= 0) {
@@ -660,8 +687,8 @@ int main(int argc, char** argv) {
     setupFullscreenQuad();
 
     setupProg("tboshader.f.glsl",PROG_ID);
-    setupProg("grad.f.glsl",PROG_GRAD);
-    setupProg("grad.f.glsl",PROG_LAPLACIAN);
+    //setupProg("grad.f.glsl",PROG_GRAD);
+    //setupProg("grad.f.glsl",PROG_LAPLACIAN);
     //setupProg("localmin.f.glsl",PROG_LOCALMIN);
     setupProg("sourcemap.f.glsl",PROG_SOURCEMAP);
     setupProg("medialaxis.f.glsl",PROG_MEDIALAXIS);
