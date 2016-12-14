@@ -1,6 +1,45 @@
+#include <OpenEXR/ImfRgbaFile.h>
+#include <OpenEXR/ImfArray.h>
+#include <OpenEXR/ImfHeader.h>
 #include <png.h>
 #include <cstdlib>
 #include <fstream>
+
+using namespace Imf;
+using namespace Imath;
+
+bool outputEXR(const char* filename,
+        const float* image,
+        int width,
+        int height,
+        int channels)
+{
+    Rgba* pixels = new Rgba[width*height];
+    for (int i = 0; i < height; ++i) {
+        for (int j = 0; j < width; ++j) {
+            int pidx = j + i*width;
+            int iidx = j + (height-i-1)*width;
+            pixels[pidx].r = image[channels*iidx];
+            if (channels > 1) {
+                pixels[pidx].g = image[channels*iidx+1];
+                pixels[pidx].b = image[channels*iidx+2];
+            } else {
+                pixels[pidx].g = image[iidx];
+                pixels[pidx].b = image[iidx];
+            }
+            if (channels > 3) {
+                pixels[pidx].a = image[channels*iidx+3];
+            } else {
+                pixels[pidx].a = 1;
+            }
+        }
+    }
+    RgbaOutputFile file(filename, width, height, WRITE_RGBA);
+    file.setFrameBuffer(pixels, 1, width);
+    file.writePixels(height);
+    delete pixels;
+    return true;
+}
 
 bool outputPNG(const char* filename,
         const unsigned char* image,
