@@ -40,6 +40,11 @@ class Scene {
             lines.push_back(l);
         }
         void addCircle(Vector2f o, float r, float res=0.01, bool flip=false) {
+            circles.push_back(Vector3f(o[0], o[1], flip?-r:r));
+            if (r < 0) {
+                flip = !flip;
+                r = -r;
+            }
             extendBbox(o+Vector2f(r,r));
             extendBbox(o-Vector2f(r,r));
             float ares = asin(res/r);
@@ -210,6 +215,25 @@ class Scene {
             y = d[1]/v[1]*(h-2) + 1;
         }
 
+        void printScene() {
+            cout << circles.size() + lines.size() << " " << lights.size() << endl;
+            for (int i = 0; i < lines.size(); i++) {
+                //cout << 0 << " ";
+                cout << lines[i].p1[0] << " " << lines[i].p1[1] << " ";
+                cout << lines[i].p2[0] << " " << lines[i].p2[1] << endl;
+            }
+            for (int i = 0; i < circles.size(); i++) {
+                //cout << 1;
+                for (int j = 0; j < 3; j++) cout << " " << circles[i][j];
+                cout << endl;
+            }
+            cout << endl;
+            for (int i = 0; i < lights.size(); i++) {
+                for (int j = 0; j < 3; j++) cout << lights[i][j] << " ";
+                cout << endl;
+            }
+        }
+
     protected:
         void extendBbox(Vector2f p) {
             minp[0] = min(minp[0], p[0]);
@@ -222,6 +246,7 @@ class Scene {
 
         vector<float> surfels;
         vector<Line> lines;
+        vector<Vector3f> circles;
         int ncircles;
 
         vector<Vector3f> lights;
@@ -403,6 +428,8 @@ void keydown(unsigned char key, int x, int y) {
             s.addSymmetry(selectedlight, 4);
             rerasterizeLights();
         }
+    } else if (key == 'p') {
+        s.printScene();
     } else if (key == 127 && selectedlight >= 0) {
         s.deleteLight(selectedlight);
         rerasterizeLights();
