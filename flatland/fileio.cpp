@@ -20,12 +20,12 @@ bool outputEXR(const char* filename,
             int pidx = j + i*width;
             int iidx = j + (height-i-1)*width;
             pixels[pidx].r = image[channels*iidx];
-            if (channels > 1) {
+            if (channels > 2) {
                 pixels[pidx].g = image[channels*iidx+1];
                 pixels[pidx].b = image[channels*iidx+2];
             } else {
-                pixels[pidx].g = image[iidx];
-                pixels[pidx].b = image[iidx];
+                pixels[pidx].g = image[channels*iidx];
+                pixels[pidx].b = image[channels*iidx];
             }
             if (channels > 3) {
                 pixels[pidx].a = image[channels*iidx+3];

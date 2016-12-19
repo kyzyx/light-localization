@@ -400,9 +400,10 @@ void selectLight(int i) {
 }
 
 bool shouldExitImmediately = false;
+bool shouldWriteExrFile = false;
 bool shouldWritePngFile = false;
 bool shouldWritePlyFile = false;
-string pngFilename, plyFilename;
+string pngFilename, plyFilename, exrFilename;
 
 void keydown(unsigned char key, int x, int y) {
     if (key == ',') {
@@ -420,6 +421,7 @@ void keydown(unsigned char key, int x, int y) {
         currprog = (currprog+1)%NUM_PROGS;
     } else if (key == ' ') {
         if (pngFilename.length()) shouldWritePngFile = true;
+        if (exrFilename.length()) shouldWriteExrFile = true;
         if (plyFilename.length()) shouldWritePlyFile = true;
     } else if (key == '[' && selectedlight >= 0) {
         float intensity = s.getLight(selectedlight)[2];
@@ -502,10 +504,16 @@ void mousemove(int x, int y) {
 }
 
 void draw() {
-    if (shouldWritePlyFile) {
+    if (shouldWritePlyFile || shouldWriteExrFile) {
         s.computeField(distancefield);
-        outputPLY(plyFilename.c_str(), distancefield, width, height, displayscale==1?auxlayer:NULL);
-        shouldWritePlyFile = false;
+        if (shouldWritePlyFile) {
+            outputPLY(plyFilename.c_str(), distancefield, width, height, displayscale==1?auxlayer:NULL);
+            shouldWritePlyFile = false;
+        }
+        if (shouldWriteExrFile) {
+            outputEXR(exrFilename.c_str(), distancefield, width, height, 2);
+            shouldWriteExrFile = false;
+        }
     } else {
         s.computeField();
     }
@@ -653,6 +661,13 @@ void setupFullscreenQuad() {
     glBindVertexArray(0);
 }
 
+bool endswith(const string& s, string e) {
+    if (s.length() > e.length())
+        return s.compare(s.length()-e.length(), e.length(), e) == 0;
+    else
+        return false;
+}
+
 int main(int argc, char** argv) {
     option::Stats stats(usage, argc-1, argv+1);
     option::Option options[stats.options_max], buffer[stats.buffer_max];
@@ -737,8 +752,16 @@ int main(int argc, char** argv) {
         shouldExitImmediately = true;
     }
     if (options[OUTPUT_IMAGEFILE]) {
-        pngFilename = options[OUTPUT_IMAGEFILE].arg;
-        if (shouldExitImmediately) shouldWritePngFile = true;
+        string s = options[OUTPUT_IMAGEFILE].arg;
+        if (endswith(s, ".exr")) {
+            exrFilename = s;
+            if (shouldExitImmediately) shouldWriteExrFile = true;
+        } else if (endswith(s, ".png")) {
+            pngFilename = s;
+            if (shouldExitImmediately) shouldWritePngFile = true;
+        } else {
+            cout << "Unknown image output format" << endl;
+        }
     }
     if (options[OUTPUT_MESHFILE]) {
         plyFilename = options[OUTPUT_MESHFILE].arg;
