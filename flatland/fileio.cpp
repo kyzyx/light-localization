@@ -172,3 +172,90 @@ void outputPLY(const char* filename, float* data, int width, int height, float* 
         out << 3 << " " << idx << " " << (idx + 1 + width) << " " << (idx + width) << std::endl;
     }
 }
+
+bool readExrImage(const char* filename,
+        float** image,
+        int& width,
+        int& height,
+        int channels,
+        bool preallocated)
+{
+    RgbaInputFile f(filename);
+    Box2i dw = f.dataWindow();
+    width = dw.max.x - dw.min.x + 1;
+    height = dw.max.y - dw.min.y + 1;
+    Array2D<Rgba> pixels;
+    pixels.resizeErase(height, width);
+    f.setFrameBuffer(&pixels[0][0] - dw.min.x - dw.min.y * width, 1, width);
+    f.readPixels(dw.min.y, dw.max.y);
+    if (!preallocated) *image = new float[channels*width*height];
+    float* im = *image;
+    for (int i = 0; i < height; ++i) {
+        for (int j = 0; j < width; ++j) {
+            int idx = width*(height-i-1) + j;
+            im[3*idx] = pixels[i][j].r;
+            if (channels > 1) im[3*idx+1] = pixels[i][j].g;
+            if (channels > 2) im[3*idx+2] = pixels[i][j].b;
+            if (channels > 3) im[3*idx+3] = pixels[i][j].a;
+        }
+    }
+    return true;
+}
+
+bool readPngImage(const char* filename,
+        unsigned char** image,
+        int& width,
+        int& height,
+        bool preallocated)
+{
+    png_structp png_ptr;
+    png_infop info_ptr;
+    unsigned int sig_read = 0;
+    int color_type, interlace_type;
+    FILE *fp;
+
+    if ((fp = fopen(filename, "rb")) == NULL)
+        return false;
+
+    png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+    if (png_ptr == NULL) {
+        fclose(fp);
+        return false;
+    }
+
+    info_ptr = png_create_info_struct(png_ptr);
+    if (info_ptr == NULL) {
+        fclose(fp);
+        png_destroy_read_struct(&png_ptr, NULL, NULL);
+        return false;
+    }
+
+    if (setjmp(png_jmpbuf(png_ptr))) {
+        png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+        fclose(fp);
+        return false;
+    }
+    png_init_io(png_ptr, fp);
+    png_set_sig_bytes(png_ptr, sig_read);
+    png_read_png(png_ptr, info_ptr, PNG_TRANSFORM_STRIP_ALPHA | PNG_TRANSFORM_PACKING | PNG_TRANSFORM_EXPAND, NULL);
+    int bit_depth;
+    png_uint_32 pngw, pngh;
+    png_get_IHDR(png_ptr, info_ptr, &pngw, &pngh, &bit_depth, &color_type,
+            &interlace_type, NULL, NULL);
+    width = pngw;
+    height = pngh;
+
+    unsigned int row_bytes = png_get_rowbytes(png_ptr, info_ptr);
+    if (!preallocated) *image = new unsigned char[width*height*3];
+    char* im = (char*) *image;
+
+    png_bytepp row_pointers = png_get_rows(png_ptr, info_ptr);
+
+    for (int i = 0; i < height; i++) {
+        memcpy(im+(row_bytes * (height-1-i)), row_pointers[i], row_bytes);
+    }
+
+    png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+    fclose(fp);
+    return true;
+}
