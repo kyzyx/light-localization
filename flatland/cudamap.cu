@@ -5,6 +5,20 @@
 #define BLOCK_SIZE 512
 #define MAX_FLOAT 1e9
 
+inline __host__ __device__ float2 normalize(float2 a) {
+    float l = sqrt(a.x*a.x + a.y*a.y);
+    return make_float2(a.x/l, a.y/l);
+}
+inline __host__ __device__ float dot(float2 a, float2 b) {
+        return a.x * b.x + a.y * b.y;
+}
+inline __host__ __device__ float dot(float3 a, float3 b) {
+        return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+inline __host__ __device__ float dot(float4 a, float4 b) {
+        return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+}
+
 __device__ static float2 cmpVI(float2 a, float2 b) {
     return a.x<b.x?a:b;
 }
@@ -37,16 +51,31 @@ __device__ static char intersects(float2 a, float2 b, float2 c, float2 d) {
     return v1*v2;
 }
 __device__ static char lineocclusion(float2* line_occluders, int nlines, float2 a, float2 b) {
-    char v = 1;
+    char occ = 1;
     for (int i = 0; i < nlines; i+=2) {
-        v *= (1-intersects(line_occluders[i], line_occluders[i+1], a, b));
+        occ *= (1-intersects(line_occluders[i], line_occluders[i+1], a, b));
     }
-    return v;
+    return occ;
 }
-__device__ static char circleocclusion(int ncircles, float2 a, float2 b) {
-    char r1 = (a.x*a.x + a.y*a.y > 1)?0:1;
-    char r2 = (b.x*b.x + b.y*b.y > 1)?0:-1;
-    return (r1 + r2 == 0)?1:(1-ncircles);
+__device__ static char circleocclusion(float4* circle_occluders, int ncircles, float2 a, float2 b) {
+    char occ = 1;
+    float2 v = make_float2(b.x-a.x, b.y-a.y);
+    float L = sqrt(v.x*v.x + v.y*v.y);
+    v.x /= L;
+    v.y /= L;
+    for (int i = 0; i < ncircles; i++) {
+        float2 O = make_float2(circle_occluders[i].x, circle_occluders[i].y);
+        float rr = circle_occluders[i].z*circle_occluders[i].z;
+        float2 EO = make_float2(O.x-a.x, O.y-a.y);
+        float R = dot(EO,EO);
+        float vv = dot(EO, v);
+        float disc = rr - (R - vv*vv);
+        float d = sqrt(disc);
+        /*float t = R>rr?vv+d:vv-d;*/
+        /*float2 p = make_float2(a.x+t*v.x, a.y+t*v.y);*/
+        occ *= ((R>rr && (vv<=0 || L<vv-d)) || disc < 0 || (R<rr && L<vv+d))?1:0;
+    }
+    return occ;
 }
 
 const float EPSILON = 1e-5;
@@ -55,9 +84,11 @@ __global__ void cuAddlight(
         float* intensities,
         float4* surfels,
         float4* line_occluders, int nlines,
+        float4* circle_occluders, int ncircles,
         float intensity, float x, float y, int n)
 {
-    __shared__ float2 shared_line_occluders[128];
+    __shared__ float2 shared_line_occluders[64];
+    __shared__ float4 shared_circle_occluders[32];
 
     int tid = threadIdx.x;
     int surfaceIdx = tid + blockDim.x*blockIdx.x;
@@ -66,6 +97,9 @@ __global__ void cuAddlight(
         float4 line = line_occluders[tid];
         shared_line_occluders[2*tid] = make_float2(line.x, line.y);
         shared_line_occluders[2*tid+1] = make_float2(line.z, line.w);
+    }
+    if (tid < ncircles) {
+        shared_circle_occluders[tid] = circle_occluders[tid];
     }
     __syncthreads();
 
@@ -76,7 +110,10 @@ __global__ void cuAddlight(
         float LdotL = L.x*L.x+L.y*L.y;
         float ndotL = fmaxf(surfel.z*L.x+surfel.w*L.y,0.f);
         float ret = LdotL>0?ndotL*intensity/(LdotL*sqrt(LdotL)):0;
-        char occl = lineocclusion(shared_line_occluders, nlines*2, make_float2(surfel.x + EPSILON*surfel.z, surfel.y + EPSILON*surfel.w), make_float2(x,y));
+        float2 A = make_float2(surfel.x + EPSILON*surfel.z, surfel.y + EPSILON*surfel.w);
+        float2 B = make_float2(x,y);
+        char occl = lineocclusion(shared_line_occluders, nlines*2,A,B)*
+                    circleocclusion(shared_circle_occluders,ncircles,A,B);
         atomicAdd(intensities+surfaceIdx, ret*occl);
     }
 }
@@ -84,10 +121,12 @@ __global__ void cuAddDirectionalLight(
         float* intensities,
         float4* surfels,
         float4* line_occluders, int nlines,
+        float4* circle_occluders, int ncircles,
         float intensity, float x, float y,
         float nx, float ny, float d, int n)
 {
-    __shared__ float2 shared_line_occluders[128];
+    __shared__ float2 shared_line_occluders[64];
+    __shared__ float4 shared_circle_occluders[32];
 
     int tid = threadIdx.x;
     int surfaceIdx = tid + blockDim.x*blockIdx.x;
@@ -96,6 +135,9 @@ __global__ void cuAddDirectionalLight(
         float4 line = line_occluders[tid];
         shared_line_occluders[2*tid] = make_float2(line.x, line.y);
         shared_line_occluders[2*tid+1] = make_float2(line.z, line.w);
+    }
+    if (tid < ncircles) {
+        shared_circle_occluders[tid] = circle_occluders[tid];
     }
     __syncthreads();
 
@@ -110,7 +152,10 @@ __global__ void cuAddDirectionalLight(
         float ct = -(L.x*nx + L.y*ny)/mag;
         float scaling = ct>0.2?pow(ct, d):0;
         float ret = LdotL>0?ndotL*intensity*scaling/(LdotL*mag):0;
-        char occl = lineocclusion(shared_line_occluders, nlines*2, make_float2(surfel.x + EPSILON*surfel.z, surfel.y + EPSILON*surfel.w), make_float2(x,y));
+        float2 A = make_float2(surfel.x + EPSILON*surfel.z, surfel.y + EPSILON*surfel.w);
+        float2 B = make_float2(x,y);
+        char occl = lineocclusion(shared_line_occluders, nlines*2,A,B)*
+                    circleocclusion(shared_circle_occluders,ncircles,A,B);
         atomicAdd(intensities+surfaceIdx, ret*occl);
     }
 }
@@ -130,7 +175,8 @@ __global__ void cuCompute(
         )
 {
     __shared__ float2 mini[BLOCK_SIZE];
-    __shared__ float2 shared_line_occluders[128];
+    __shared__ float2 shared_line_occluders[64];
+    __shared__ float4 shared_circle_occluders[32];
 
     int tid = threadIdx.x;
     int surfaceIdx = tid + blockDim.x*blockIdx.x;
@@ -140,6 +186,9 @@ __global__ void cuCompute(
         float4 line = line_occluders[tid];
         shared_line_occluders[2*tid] = make_float2(line.x, line.y);
         shared_line_occluders[2*tid+1] = make_float2(line.z, line.w);
+    }
+    if (tid < ncircles) {
+        shared_circle_occluders[tid] = circle_occluders[tid];
     }
     __syncthreads();
 
@@ -159,8 +208,9 @@ __global__ void cuCompute(
         float Ly = p.y - surfel.y;
         float LdotL = Lx*Lx + Ly*Ly;
         float ndotLn = (surfel.z*Lx + surfel.w*Ly)/sqrt(LdotL);
-        char occl = lineocclusion(shared_line_occluders, nlines*2, make_float2(surfel.x + surfel.z*EPSILON, surfel.y + surfel.w*EPSILON), p);
-        occl *= circleocclusion(ncircles, make_float2(surfel.x + surfel.z*EPSILON, surfel.y + surfel.w*EPSILON), p);
+        float2 A = make_float2(surfel.x + EPSILON*surfel.z, surfel.y + EPSILON*surfel.w);
+        char occl = lineocclusion(shared_line_occluders, nlines*2,A,p)*
+                    circleocclusion(shared_circle_occluders,ncircles,A,p);
         float v = intensity*occl*ndotLn>0?intensity*LdotL/ndotLn:MAX_FLOAT;
         mini[tid].x = v>0.f?v:MAX_FLOAT;
     }
@@ -267,12 +317,18 @@ void Cudamap_setIntensities(Cudamap* cudamap, float* intensities) {
 
 void Cudamap_addLight(Cudamap* cudamap, float intensity, float x, float y) {
     cuAddlight<<< (cudamap->n+BLOCK_SIZE-1)/BLOCK_SIZE, BLOCK_SIZE >>>(
-            cudamap->d_intensities, cudamap->d_surfels, cudamap->d_line_occluders, cudamap->nlines, intensity, x, y, cudamap->n);
+            cudamap->d_intensities, cudamap->d_surfels,
+            cudamap->d_line_occluders, cudamap->nlines,
+            cudamap->d_circle_occluders, cudamap->ncircles,
+            intensity, x, y, cudamap->n);
 }
 void Cudamap_addDirectionalLight(Cudamap* cudamap, float intensity, float x, float y, float fx, float fy) {
     float d = sqrt(fx*fx + fy*fy);
     cuAddDirectionalLight<<< (cudamap->n+BLOCK_SIZE-1)/BLOCK_SIZE, BLOCK_SIZE >>>(
-            cudamap->d_intensities, cudamap->d_surfels, cudamap->d_line_occluders, cudamap->nlines, intensity, x, y, fx/d, fy/d, d, cudamap->n);
+            cudamap->d_intensities, cudamap->d_surfels,
+            cudamap->d_line_occluders, cudamap->nlines,
+            cudamap->d_circle_occluders, cudamap->ncircles,
+            intensity, x, y, fx/d, fy/d, d, cudamap->n);
 }
 
 void Cudamap_compute(Cudamap* cudamap, float* field)

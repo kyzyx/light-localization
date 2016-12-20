@@ -105,7 +105,14 @@ class Scene {
                 linedata.push_back(lines[i].p2[0]);
                 linedata.push_back(lines[i].p2[1]);
             }
-            Cudamap_init(&cm, surfels.data(), linedata.data());
+            vector<float> circledata;
+            for (int i = 0; i < cm.ncircles; i++) {
+                circledata.push_back(circles[i][0]);
+                circledata.push_back(circles[i][1]);
+                circledata.push_back(abs(circles[i][2]));
+                circledata.push_back(circles[i][2]);
+            }
+            Cudamap_init(&cm, surfels.data(), linedata.data(), circledata.data());
         }
         void setCudaGLTexture(GLuint tex) {
             Cudamap_setGLTexture(&cm, tex);
