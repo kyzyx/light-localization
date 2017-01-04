@@ -57,13 +57,9 @@ __global__ void cuCompute(
         float* intensities,
         float3* surfel_pos,
         float3* surfel_normal,
-        float3 plane_normal,
-        float3 plane_axis,
-        float3 plane_point,
         int n,
         float2* field,
-        int w, int h
-        )
+        int w, int zcoord)
 {
     __shared__ float2 mini[BLOCK_SIZE];
 
@@ -80,9 +76,11 @@ __global__ void cuCompute(
         mini[tid].y = __int_as_float(surfaceIdx);
 
         // Computation
-        float3 axis2 = cross(plane_normal, plane_axis);
-        float2 pix = make_float2(blockIdx.y/(float)w, blockIdx.z/(float)h);
-        float3 p = plane_point + pix.x*plane_axis + pix.y*axis2;
+        float3 p = make_float3(
+                (blockIdx.y + 0.5)/(float)w,
+                (blockIdx.z + 0.5)/(float)w,
+                (zcoord + 0.5)/(float)w
+            );
         float3 L = p - pos;
         float LdotL = dot(L,L);
         float ndotLn = dot(norm, L)/sqrt(LdotL);
@@ -132,7 +130,7 @@ __global__ void cuCompute(
 
     // Final data copy
     if (tid == 0) {
-        atomicMin2(field+blockIdx.z*w+blockIdx.y, mini[0]);
+        atomicMin2(field+zcoord*w*w+blockIdx.z*w+blockIdx.y, mini[0]);
     }
 }
 void Cudamap_init(Cudamap* cudamap, const float* surfel_pos, const float* surfel_normal) {
@@ -140,38 +138,11 @@ void Cudamap_init(Cudamap* cudamap, const float* surfel_pos, const float* surfel
     cudaMalloc((void**) &(cudamap->d_intensities), sizeof(float)*cudamap->n);
     cudaMalloc((void**) &(cudamap->d_surfel_pos), sizeof(float3)*cudamap->n);
     cudaMalloc((void**) &(cudamap->d_surfel_normal), sizeof(float3)*cudamap->n);
-    cudaMalloc((void**) &(cudamap->d_field), sizeof(float2)*cudamap->w*cudamap->h);
+    cudaMalloc((void**) &(cudamap->d_field), sizeof(float2)*cudamap->w*cudamap->w*cudamap->w);
 
     cudaMemcpy(cudamap->d_surfel_pos, surfel_pos, sizeof(float3)*cudamap->n, cudaMemcpyHostToDevice);
     cudaMemcpy(cudamap->d_surfel_normal, surfel_normal, sizeof(float3)*cudamap->n, cudaMemcpyHostToDevice);
     cudaMemset((void*) cudamap->d_intensities, 0, sizeof(float)*cudamap->n);
-}
-
-void Cudamap_setGLTexture(Cudamap* cudamap, unsigned int tex) {
-    cudaGLSetGLDevice(0);
-    cudaStream_t cuda_stream;
-    cudaGraphicsResource *resources[1];
-
-    cudaGraphicsGLRegisterImage(resources, tex, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsSurfaceLoadStore);
-    cudaStreamCreate(&cuda_stream);
-    cudaGraphicsMapResources(1, resources, cuda_stream);
-    cudaGraphicsSubResourceGetMappedArray(&(cudamap->d_field_tex), resources[0], 0, 0);
-    cudaGraphicsUnmapResources(1, resources, cuda_stream);
-    cudaStreamDestroy(cuda_stream);
-}
-
-void Cudamap_setGLBuffer(Cudamap* cudamap, unsigned int pbo) {
-    cudaStream_t cuda_stream;
-    cudaGraphicsResource *resources[1];
-    cudaGLSetGLDevice(0);
-    size_t size;
-
-    cudaGraphicsGLRegisterBuffer(resources, pbo, cudaGraphicsMapFlagsNone);
-    cudaStreamCreate(&cuda_stream);
-    cudaGraphicsMapResources(1, resources, cuda_stream);
-    cudaGraphicsResourceGetMappedPointer((void **)&(cudamap->d_field), &size, resources[0]);
-    cudaGraphicsUnmapResources(1, resources, cuda_stream);
-    cudaStreamDestroy(cuda_stream);
 }
 void Cudamap_free(Cudamap* cudamap) {
     cudaFree(cudamap->d_surfel_pos);
@@ -194,38 +165,29 @@ void Cudamap_addLight(Cudamap* cudamap, float intensity, float x, float y, float
             intensity, x, y, z, cudamap->n);
 }
 
-void Cudamap_compute(Cudamap* cudamap, float* field, const float* plane_normal, const float* plane_axis, const float* plane_point)
+void Cudamap_compute(Cudamap* cudamap, float* field)
 {
-    static int running = 0;
     int n = cudamap->n;
     int w = cudamap->w;
-    int h = cudamap->h;
 
-    if (running) return;
-    running = 1;
-    for (int i = 0; i < w*h; i++) {
+    for (int i = 0; i < w*w*w; i++) {
         field[2*i] = MAX_FLOAT;
         field[2*i+1] = 0;
     }
-    cudaMemcpy(cudamap->d_field, field, sizeof(float2)*w*h, cudaMemcpyHostToDevice);
+    cudaMemcpy(cudamap->d_field, field, sizeof(float2)*w*w*w, cudaMemcpyHostToDevice);
 
     dim3 threads(BLOCK_SIZE, 1, 1);
-    dim3 blocks((n+BLOCK_SIZE-1)/BLOCK_SIZE, w, h);
+    dim3 blocks((n+BLOCK_SIZE-1)/BLOCK_SIZE, w, w);
 
-    cuCompute<BLOCK_SIZE><<< blocks, threads >>>(
-            cudamap->d_intensities,
-            cudamap->d_surfel_pos,
-            cudamap->d_surfel_normal,
-            make_float3(plane_normal[0], plane_normal[1], plane_normal[2]),
-            make_float3(plane_axis[0], plane_axis[1], plane_axis[2]),
-            make_float3(plane_point[0], plane_point[1], plane_point[2]),
-            n, cudamap->d_field, w, h
-            );
-
-    if (cudamap->d_field_tex) {
-        cudaMemcpyToArray(cudamap->d_field_tex, 0, 0, cudamap->d_field, sizeof(float2)*w*h, cudaMemcpyDeviceToDevice);
+    for (int i = 0; i < w; i++) {
+        cuCompute<BLOCK_SIZE><<< blocks, threads >>>(
+                cudamap->d_intensities,
+                cudamap->d_surfel_pos,
+                cudamap->d_surfel_normal,
+                n, cudamap->d_field, w, i);
+        printf("Done %d/%d\n", i, w);
     }
-    cudaMemcpy(field, cudamap->d_field, sizeof(float2)*w*h, cudaMemcpyDeviceToHost);
+
+    cudaMemcpy(field, cudamap->d_field, sizeof(float2)*w*w*w, cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize();
-    running = 0;
 }

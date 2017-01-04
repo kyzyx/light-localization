@@ -11,11 +11,10 @@
 #include "mesh.h"
 #include "trackball.h"
 
-int width = 300;
-int height = 300;
+int width = 600;
+int height = 600;
 int width3d = 600;
 int height3d = 600;
-int displayscale = 2;
 unsigned char* imagedata;
 float* distancefield;
 
@@ -68,13 +67,10 @@ void keydown(unsigned char key, int x, int y) {
         if (plyFilename.length()) shouldWritePlyFile = true;
     } else if (key == ']') {
         planemanager->movePlane(0.01);
-    Cudamap_compute(&cudamap, distancefield, planemanager->normal(), planemanager->axis(), planemanager->point());
     } else if (key == '[') {
         planemanager->movePlane(-0.01);
-    Cudamap_compute(&cudamap, distancefield, planemanager->normal(), planemanager->axis(), planemanager->point());
     } else if (key == 'p') {
         planemanager->togglePlane();
-    Cudamap_compute(&cudamap, distancefield, planemanager->normal(), planemanager->axis(), planemanager->point());
     } else if (key == 'h') {
         // cout << helpstring << endl;
     }
@@ -129,23 +125,24 @@ void draw3D() {
     // Draw plane
     glBindVertexArray(vao);
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, tex);
+    glBindTexture(GL_TEXTURE_3D, tex);
     if (currprog == PROG_SOURCEMAP || currprog == PROG_MEDIALAXIS) {
         // FIXME: Not correct for 3D!!!
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glUniform1i(glGetUniformLocation(progs[currprog], "maxidx"), cudamap.n);
     } else {
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     }
     planemanager->Render();
-    glBindTexture(GL_TEXTURE_2D, 0);
+    glBindTexture(GL_TEXTURE_3D, 0);
     glBindVertexArray(0);
     glPopMatrix();
 }
 
 void drawField() {
+    return;
     if (shouldWritePlyFile || shouldWriteExrFile) {
         if (shouldWritePlyFile) {
             outputPLY(plyFilename.c_str(), distancefield, width, height, NULL);
@@ -159,25 +156,25 @@ void drawField() {
     glUseProgram(progs[currprog]);
     glBindVertexArray(vao);
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, tex);
+    glBindTexture(GL_TEXTURE_3D, tex);
     //glBindTexture(GL_TEXTURE_BUFFER,tbo_tex);
     //glTexBuffer(GL_TEXTURE_BUFFER,GL_R32F,pbo);
     if (currprog == PROG_SOURCEMAP || currprog == PROG_MEDIALAXIS) {
         // FIXME: Not correct for 3D!!!
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glUniform1i(glGetUniformLocation(progs[currprog], "maxidx"), cudamap.n);
     } else {
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     }
     glUniform1f(glGetUniformLocation(progs[currprog], "exposure"), exposure);
     glDrawArrays(GL_TRIANGLES,0,6);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    glBindTexture(GL_TEXTURE_3D, 0);
     glBindVertexArray(0);
     if (shouldWritePngFile) {
-        glReadPixels(width3d,0,width*displayscale, height*displayscale, GL_RGB, GL_UNSIGNED_BYTE, (void*) imagedata);
-        outputPNG(pngFilename.c_str(), imagedata, width*displayscale, height*displayscale);
+        glReadPixels(width3d,0,width, height, GL_RGB, GL_UNSIGNED_BYTE, (void*) imagedata);
+        outputPNG(pngFilename.c_str(), imagedata, width, height);
         shouldWritePngFile = false;
     }
     if (shouldExitImmediately) {
@@ -188,7 +185,7 @@ void drawField() {
 void draw() {
     glClearColor(0.1f,0.1f,0.2f,1.f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glViewport(width3d,0,width*displayscale,height*displayscale);
+    glViewport(width3d,0,width,height);
     drawField();
     glViewport(0,0,width3d,height3d);
     draw3D();
@@ -200,12 +197,12 @@ void initRenderTextures() {
     glBindTexture(GL_TEXTURE_2D, rfr_tex);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width*displayscale, height*displayscale, 0, GL_RGBA, GL_FLOAT, 0);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, 0);
     glBindTexture(GL_TEXTURE_2D, 0);
 
     glGenRenderbuffers(1, &rfr_fbo_z);
     glBindRenderbuffer(GL_RENDERBUFFER, rfr_fbo_z);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width*displayscale, height*displayscale);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width, height);
     glBindRenderbuffer(GL_RENDERBUFFER, 0);
 
     glGenFramebuffers(1, &rfr_fbo);
@@ -213,24 +210,6 @@ void initRenderTextures() {
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rfr_tex, 0);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rfr_fbo_z);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-}
-
-void initCudaGlTextures() {
-    glGenBuffers(1, &pbo);
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
-    glBufferData(GL_PIXEL_UNPACK_BUFFER, 2*width*height*sizeof(float), NULL, GL_DYNAMIC_DRAW);
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-    glGenTextures(1, &tbo_tex);
-    glBindTexture(GL_TEXTURE_BUFFER, tbo_tex);
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32F, pbo);
-    glBindTexture(GL_TEXTURE_BUFFER, 0);
-
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RG32F, width, height, 0, GL_RG, GL_FLOAT, 0);
-    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void setupProg(const char* fshader, int n) {
@@ -297,15 +276,11 @@ int main(int argc, char** argv) {
     if (options[RESOLUTION]) {
         width = atoi(options[RESOLUTION].arg);
         height = width;
-        displayscale = 900/width;
-    }
-    if (options[DISPLAYSCALE]) {
-        displayscale = atoi(options[DISPLAYSCALE].arg);
     }
 
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
-    glutInitWindowSize(width*displayscale+width3d, max(height*displayscale, height3d));
+    glutInitWindowSize(width+width3d, max(height, height3d));
     glutCreateWindow("Light Localization");
     glutDisplayFunc(draw);
     glutIdleFunc(draw);
@@ -322,10 +297,9 @@ int main(int argc, char** argv) {
     camdist = 4;
     exposure = 10;
 
-    imagedata = new unsigned char[3*width*height*displayscale*displayscale];
-    distancefield = new float[2*width*height];
+    imagedata = new unsigned char[3*width*height];
+    distancefield = new float[2*width*width*width];
 
-    initCudaGlTextures();
     initRenderTextures();
     setupFullscreenQuad();
 
@@ -334,12 +308,10 @@ int main(int argc, char** argv) {
     setupProg("medialaxis.f.glsl",PROG_MEDIALAXIS);
     currprog = 0;
 
+    int dim = 256;
     if (options[INPUT_SCENEFILE]) {
         mesh = new LitMesh(&cudamap);
         mesh->ReadFromPly(options[INPUT_SCENEFILE].arg);
-        mesh->cudaInit(width,height);
-        Cudamap_setGLTexture(&cudamap, tex);
-        Cudamap_setGLBuffer(&cudamap, pbo);
     } else {
         option::printUsage(cout, usage);
         return 0;
@@ -367,7 +339,37 @@ int main(int argc, char** argv) {
     planemanager = new PlaneManager();
     planemanager->setExposure(exposure);
 
-    Cudamap_compute(&cudamap, distancefield, planemanager->normal(), planemanager->axis(), planemanager->point());
+    if (options[INPUT_VOLUME]) {
+        ifstream in(options[INPUT_VOLUME].arg, ios::in | ios::binary);
+        in.read((char*) &dim, sizeof(int));
+        for (int i = 0; i < dim; i++) {
+            for (int j = 0; j < dim; j++) {
+                in.read((char*) &(distancefield[2*(i*dim*dim + j*dim)]), sizeof(float)*2*dim);
+            }
+        }
+        in.close();
+        mesh->cudaInit(dim);
+    } else {
+        mesh->cudaInit(dim);
+        cout << "Computing field..." << endl;
+        Cudamap_compute(&cudamap, distancefield);
+        cout << "Done." << endl;
+        Cudamap_free(&cudamap);
+    }
+    if (options[OUTPUT_VOLUME]) {
+        ofstream out(options[OUTPUT_VOLUME].arg, ios::out | ios::trunc | ios::binary);
+        out.write((char*) &dim, sizeof(int));
+        for (int i = 0; i < dim; i++) {
+            for (int j = 0; j < dim; j++) {
+                out.write((char*) &(distancefield[2*(i*dim*dim + j*dim)]), sizeof(float)*2*dim);
+            }
+        }
+        out.close();
+    }
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_3D, tex);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RG32F, dim, dim, dim, 0, GL_RG, GL_FLOAT, distancefield);
+    glBindTexture(GL_TEXTURE_3D, 0);
 
     glutMainLoop();
 }

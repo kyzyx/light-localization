@@ -6,11 +6,10 @@ uniform vec3 xax;
 uniform vec3 yax;
 uniform mat4 modelviewmatrix;
 uniform mat4 projectionmatrix;
-out vec2 st;
+out vec3 stu;
 
 void main() {
-   st = coord.st;
    vec3 c = (1+pos)/2;
-   vec3 pp = pt + xax*c.x + yax*c.y;
-   gl_Position = projectionmatrix*modelviewmatrix*vec4(pp,1);
+   stu = pt + xax*c.x + yax*c.y;
+   gl_Position = projectionmatrix*modelviewmatrix*vec4(stu,1);
 }

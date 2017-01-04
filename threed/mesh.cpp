@@ -124,9 +124,8 @@ void LitMesh::ReadFromPly(const char* filename) {
     numspherefaces = sf.size();
 }
 
-void LitMesh::cudaInit(int w, int h) {
-    cm->w = w;
-    cm->h = h;
+void LitMesh::cudaInit(int dim) {
+    cm->w = dim;
     cm->n = v.size()/3;
     Cudamap_init(cm, v.data(), n.data());
     for (int i = 0; i < l.size(); i += 4) {

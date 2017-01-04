@@ -19,7 +19,7 @@ PlaneManager::PlaneManager() {
 
 void PlaneManager::initShaders() {
     ShaderProgram* prog;
-    prog = new FileShaderProgram("texplane.v.glsl", "tboshader.f.glsl");
+    prog = new FileShaderProgram("texplane.v.glsl", "texplane.f.glsl");
     prog->init();
     progid = prog->getProgId();
     expuniform = glGetUniformLocation(progid, "exposure");

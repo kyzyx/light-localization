@@ -12,7 +12,7 @@ class LitMesh {
         void Render();
         void RenderLights(float radius=0.01f);
 
-        void cudaInit(int w, int h);
+        void cudaInit(int dim);
         void addLight(float intensity, float x, float y, float z) {
             l.push_back(x);
             l.push_back(y);
