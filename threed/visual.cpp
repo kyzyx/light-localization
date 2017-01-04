@@ -54,6 +54,12 @@ void keydown(unsigned char key, int x, int y) {
     } else if (key == '.') {
         exposure += 0.5;
         planemanager->setExposure(exposure+0.5);
+    } else if (key == '=') {
+        mesh->setExposure(mesh->getExposure()+0.05);
+    } else if (key == '-') {
+        if (mesh->getExposure() > 0.05) {
+            mesh->setExposure(mesh->getExposure()-0.05);
+        }
     } else if (key == 'm') {
         currprog = (currprog+1)%NUM_PROGS;
     } else if (key == ' ') {

@@ -20,6 +20,8 @@ class LitMesh {
             l.push_back(intensity);
         };
 
+        float getExposure() const { return exposure; }
+        float setExposure(float e) { exposure = e; }
         int NLights() const { return l.size()/4; }
         int NVertices() const { return v.size(); }
         const float* vertices() const { return v.data(); }
@@ -36,10 +38,12 @@ class LitMesh {
         std::vector<unsigned int> f;
         std::vector<float> l;
 
+        float exposure;
+
         GLuint meshao;
         GLuint meshprogid, lightprogid;
         GLuint sphereao, numspherefaces;
-        GLuint meshmvmatrixuniform, meshprojectionmatrixuniform;
-        GLuint lightmvmatrixuniform, lightprojectionmatrixuniform, lightposuniform;
+        GLuint meshmvmatrixuniform, meshprojectionmatrixuniform, meshexpuniform;
+        GLuint lightmvmatrixuniform, lightprojectionmatrixuniform;
 };
 #endif

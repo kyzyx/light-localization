@@ -9,7 +9,7 @@
 using namespace std;
 
 LitMesh::LitMesh(Cudamap* cudamap)
-    : cm(cudamap)
+    : cm(cudamap), exposure(0.5)
 {
 }
 
@@ -140,13 +140,13 @@ void LitMesh::initShaders() {
     meshprogid = meshprog->getProgId();
     meshmvmatrixuniform = glGetUniformLocation(meshprogid, "modelviewmatrix");
     meshprojectionmatrixuniform = glGetUniformLocation(meshprogid, "projectionmatrix");
+    meshexpuniform = glGetUniformLocation(meshprogid, "exposure");
     delete meshprog;
     ShaderProgram* lightprog = new FileShaderProgram("pass.v.glsl", "fixedlight.f.glsl");
     lightprog->init();
     lightprogid = lightprog->getProgId();
     lightmvmatrixuniform = glGetUniformLocation(lightprogid, "modelviewmatrix");
     lightprojectionmatrixuniform = glGetUniformLocation(lightprogid, "projectionmatrix");
-    lightposuniform = glGetUniformLocation(lightprogid, "translation");
     delete lightprog;
 }
 
@@ -179,6 +179,7 @@ void LitMesh::Render() {
     glGetFloatv(GL_PROJECTION_MATRIX, projection);
     glUniformMatrix4fv(meshprojectionmatrixuniform, 1, GL_FALSE, projection);
     glUniformMatrix4fv(meshmvmatrixuniform, 1, GL_FALSE, modelview);
+    glUniform1f(meshexpuniform, exposure);
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
