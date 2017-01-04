@@ -14,10 +14,15 @@ LitMesh::LitMesh(Cudamap* cudamap)
 }
 
 LitMesh::~LitMesh() {
-    gluDeleteQuadric(quadric);
 }
 
-void LitMesh::ReadFromPly(const char* filename) {
+void readPly(const char* filename,
+        std::vector<float>& verts,
+        std::vector<float>& norms,
+        std::vector<unsigned int>& faces,
+        std::vector<float>& lights
+        )
+{
     ifstream in(filename);
     int nfaces, nvertices;
     int nlights = 0;
@@ -48,30 +53,77 @@ void LitMesh::ReadFromPly(const char* filename) {
     for (int i = 0; i < nvertices; i++) {
         float x, y, z;
         in >> x >> y >> z;
-        v.push_back(x);
-        v.push_back(y);
-        v.push_back(z);
+        verts.push_back(x);
+        verts.push_back(y);
+        verts.push_back(z);
         in >> x >> y >> z;
-        n.push_back(x);
-        n.push_back(y);
-        n.push_back(z);
+        norms.push_back(x);
+        norms.push_back(y);
+        norms.push_back(z);
     }
     for (int i = 0; i < nfaces; i++) {
         float a, b, c, d;
         in >> a >> b >> c >> d;
-        f.push_back(b);
-        f.push_back(c);
-        f.push_back(d);
+        faces.push_back(b);
+        faces.push_back(c);
+        faces.push_back(d);
     }
     for (int i = 0; i < nlights; i++) {
         float a, b, c, d;
         in >> a >> b >> c >> d;
-        addLight(d,a,b,c);
+        lights.push_back(d);
+        lights.push_back(a);
+        lights.push_back(b);
+        lights.push_back(c);
     }
-
-    computeLighting();
-    initOpenGL();
 }
+
+void initAO(GLuint* vao,
+        int nv, const float* pos, const float* normal,
+        int nf, const unsigned int* faces,
+        const float* col=0)
+{
+    GLuint vbo[3];
+    GLuint ibo;
+
+    glGenVertexArrays(1, vao);
+    glGenBuffers(3, vbo);
+    glGenBuffers(1, &ibo);
+
+    glBindVertexArray(vao[0]);
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+    glBufferData(GL_ARRAY_BUFFER, nv*3*sizeof(float), pos, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
+    glBufferData(GL_ARRAY_BUFFER, nv*3*sizeof(float), normal, GL_STATIC_DRAW);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+    if (col) {
+        glEnableVertexAttribArray(2);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo[2]);
+        glBufferData(GL_ARRAY_BUFFER, nv*3*sizeof(float), col, GL_STATIC_DRAW);
+        glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+    }
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, nf*sizeof(unsigned int), faces, GL_STATIC_DRAW);
+    glBindVertexArray(0);
+}
+
+void LitMesh::ReadFromPly(const char* filename) {
+    readPly(filename, v, n, f, l);
+    computeLighting();
+    initShaders();
+    initAO(&meshao, v.size()/3, v.data(), n.data(), f.size(), f.data(), c.data());
+
+    vector<float> sv, sn, sl;
+    vector<unsigned int> sf;
+    readPly("sphere.ply", sv, sn, sf, sl);
+    initAO(&sphereao, sv.size()/3, sv.data(), sn.data(), sf.size(), sf.data());
+    numspherefaces = sf.size();
+}
+
 void LitMesh::cudaInit(int w, int h) {
     cm->w = w;
     cm->h = h;
@@ -89,43 +141,15 @@ void LitMesh::initShaders() {
     meshmvmatrixuniform = glGetUniformLocation(meshprogid, "modelviewmatrix");
     meshprojectionmatrixuniform = glGetUniformLocation(meshprogid, "projectionmatrix");
     delete meshprog;
-    //ShaderProgram* lightprog = new FileShaderProgram("pass.v.glsl", "fixedlight.f.glsl");
-    ShaderProgram* lightprog = new FileShaderProgram("pass.v.glsl", "pass.f.glsl");
+    ShaderProgram* lightprog = new FileShaderProgram("pass.v.glsl", "fixedlight.f.glsl");
     lightprog->init();
     lightprogid = lightprog->getProgId();
     lightmvmatrixuniform = glGetUniformLocation(lightprogid, "modelviewmatrix");
     lightprojectionmatrixuniform = glGetUniformLocation(lightprogid, "projectionmatrix");
+    lightposuniform = glGetUniformLocation(lightprogid, "translation");
     delete lightprog;
 }
 
-void LitMesh::initOpenGL() {
-    initShaders();
-
-    quadric = gluNewQuadric();
-    gluQuadricDrawStyle(quadric, GLU_FILL);
-
-    glGenVertexArrays(1, &vao);
-    glGenBuffers(3, vbo);
-    glGenBuffers(1, &ibo);
-
-    glBindVertexArray(vao);
-    glEnableVertexAttribArray(0);
-    glEnableVertexAttribArray(1);
-    glEnableVertexAttribArray(2);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
-    glBufferData(GL_ARRAY_BUFFER, v.size()*sizeof(float), v.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
-    glBufferData(GL_ARRAY_BUFFER, n.size()*sizeof(float), n.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[2]);
-    glBufferData(GL_ARRAY_BUFFER, c.size()*sizeof(float), c.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, f.size()*sizeof(unsigned int), f.data(), GL_STATIC_DRAW);
-    glBindVertexArray(0);
-}
 
 void LitMesh::computeLighting() {
     c.resize(v.size());
@@ -160,38 +184,28 @@ void LitMesh::Render() {
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
     glDisable(GL_LIGHTING);
-    glBindVertexArray(vao);
+    glBindVertexArray(meshao);
     glDrawElements(GL_TRIANGLES, f.size(), GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
 }
 
 void LitMesh::RenderLights(float radius) {
-    /*GLfloat modelview[16];
+    GLfloat modelview[16];
     GLfloat projection[16];
 
-    glGetFloatv(GL_MODELVIEW_MATRIX, modelview);
-    glGetFloatv(GL_PROJECTION_MATRIX, projection);
-    glUniformMatrix4fv(lightprojectionmatrixuniform, 1, GL_FALSE, projection);
-    glUniformMatrix4fv(lightmvmatrixuniform, 1, GL_FALSE, modelview);*/
-
-    glUseProgram(0);
-    glPointSize(2.f);
-    glDisable(GL_LIGHTING);
-    glEnable(GL_DEPTH_TEST);
-    glBegin(GL_POINTS);
-    for (int i = 0; i < l.size(); i += 4) {
-        glColor3f(1.f,0.f,0.f);
-        glVertex3f(l[i+0], l[i+1], l[i+2]);
-    }
-    glEnd();
-    /*glUseProgram(lightprogid);
+    glUseProgram(lightprogid);
     glEnable(GL_DEPTH_TEST);
     glDisable(GL_LIGHTING);
+    glBindVertexArray(sphereao);
     glMatrixMode(GL_MODELVIEW);
     for (int i = 0; i < l.size(); i += 4) {
         glPushMatrix();
-        glTranslatef(-l[i+0], -l[i+1], -l[i+2]);
-        gluSphere(quadric, radius, 20, 20);
+        glTranslatef(l[i], l[i+1], l[i+2]);
+        glGetFloatv(GL_MODELVIEW_MATRIX, modelview);
+        glGetFloatv(GL_PROJECTION_MATRIX, projection);
+        glUniformMatrix4fv(lightprojectionmatrixuniform, 1, GL_FALSE, projection);
+        glUniformMatrix4fv(lightmvmatrixuniform, 1, GL_FALSE, modelview);
+        glDrawElements(GL_TRIANGLES, numspherefaces, GL_UNSIGNED_INT, 0);
         glPopMatrix();
-    }*/
+    }
 }

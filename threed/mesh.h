@@ -26,7 +26,6 @@ class LitMesh {
         const float* normals() const { return n.data(); }
         const float* lights() const { return l.data(); }
     private:
-        void initOpenGL();
         void initShaders();
         void computeLighting();
 
@@ -37,10 +36,10 @@ class LitMesh {
         std::vector<unsigned int> f;
         std::vector<float> l;
 
-        GLuint vao, ibo, meshprogid, lightprogid;
-        GLuint vbo[3];
+        GLuint meshao;
+        GLuint meshprogid, lightprogid;
+        GLuint sphereao, numspherefaces;
         GLuint meshmvmatrixuniform, meshprojectionmatrixuniform;
-        GLuint lightmvmatrixuniform, lightprojectionmatrixuniform;
-        GLUquadric* quadric;
+        GLuint lightmvmatrixuniform, lightprojectionmatrixuniform, lightposuniform;
 };
 #endif

@@ -119,7 +119,7 @@ void draw3D() {
     glTranslatef(-0.5,-0.5,-0.5);
 
     mesh->Render();
-    //mesh->RenderLights();
+    mesh->RenderLights();
     // Draw plane
     glBindVertexArray(vao);
     glActiveTexture(GL_TEXTURE0);
