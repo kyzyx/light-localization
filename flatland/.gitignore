@@ -1,6 +1,9 @@
+animate
 flatland
 visual
 *.o
 *.ppm
+*.png
+*.exr
 *.lt
 .*.swp
