@@ -135,16 +135,15 @@ __global__ void cuCompute(
         atomicMin2(field+blockIdx.z*w+blockIdx.y, mini[0]);
     }
 }
-void Cudamap_init(Cudamap* cudamap, float* surfels) {
+void Cudamap_init(Cudamap* cudamap, const float* surfel_pos, const float* surfel_normal) {
     cudaSetDevice(0);
     cudaMalloc((void**) &(cudamap->d_intensities), sizeof(float)*cudamap->n);
     cudaMalloc((void**) &(cudamap->d_surfel_pos), sizeof(float3)*cudamap->n);
     cudaMalloc((void**) &(cudamap->d_surfel_normal), sizeof(float3)*cudamap->n);
     cudaMalloc((void**) &(cudamap->d_field), sizeof(float2)*cudamap->w*cudamap->h);
 
-    cudaMemcpy(cudamap->d_surfel_pos, surfels, sizeof(float3)*cudamap->n, cudaMemcpyHostToDevice);
-    surfels += sizeof(float3)*cudamap->n;
-    cudaMemcpy(cudamap->d_surfel_normal, surfels, sizeof(float3)*cudamap->n, cudaMemcpyHostToDevice);
+    cudaMemcpy(cudamap->d_surfel_pos, surfel_pos, sizeof(float3)*cudamap->n, cudaMemcpyHostToDevice);
+    cudaMemcpy(cudamap->d_surfel_normal, surfel_normal, sizeof(float3)*cudamap->n, cudaMemcpyHostToDevice);
     cudaMemset((void*) cudamap->d_intensities, 0, sizeof(float)*cudamap->n);
 }
 
@@ -195,7 +194,7 @@ void Cudamap_addLight(Cudamap* cudamap, float intensity, float x, float y, float
             intensity, x, y, z, cudamap->n);
 }
 
-void Cudamap_compute(Cudamap* cudamap, float* field, float* plane_normal, float* plane_axis, float* plane_point)
+void Cudamap_compute(Cudamap* cudamap, float* field, const float* plane_normal, const float* plane_axis, const float* plane_point)
 {
     static int running = 0;
     int n = cudamap->n;
