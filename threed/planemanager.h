@@ -16,9 +16,10 @@ class PlaneManager {
         const float* point() const { return planePoint.data(); }
         const float* normal() const { return planeNormal.data(); }
         const float* axis() const { return planeAxis.data(); }
+
+        Eigen::Vector3f planePoint, planeNormal, planeAxis;
     private:
         void initShaders();
-        Eigen::Vector3f planePoint, planeNormal, planeAxis;
 
         std::vector<Eigen::Vector3f> default_points;
         std::vector<Eigen::Vector3f> default_normals;

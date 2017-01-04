@@ -142,7 +142,6 @@ void draw3D() {
 }
 
 void drawField() {
-    return;
     if (shouldWritePlyFile || shouldWriteExrFile) {
         if (shouldWritePlyFile) {
             outputPLY(plyFilename.c_str(), distancefield, width, height, NULL);
@@ -169,6 +168,15 @@ void drawField() {
         glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     }
     glUniform1f(glGetUniformLocation(progs[currprog], "exposure"), exposure);
+
+    Eigen::Vector3f planePoint = planemanager->planePoint;
+    Eigen::Vector3f planeNormal = planemanager->planeNormal;
+    Eigen::Vector3f planeAxis = planemanager->planeAxis;
+    Eigen::Vector3f yax = planeNormal.cross(planeAxis);
+    glUniform3f(glGetUniformLocation(progs[currprog], "pt"), planePoint[0], planePoint[1], planePoint[2]);
+    glUniform3f(glGetUniformLocation(progs[currprog], "xax"), planeAxis[0], planeAxis[1], planeAxis[2]);
+    glUniform3f(glGetUniformLocation(progs[currprog], "yax"), yax[0], yax[1], yax[2]);
+
     glDrawArrays(GL_TRIANGLES,0,6);
     glBindTexture(GL_TEXTURE_3D, 0);
     glBindVertexArray(0);
