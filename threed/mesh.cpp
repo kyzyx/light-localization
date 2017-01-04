@@ -71,10 +71,10 @@ void readPly(const char* filename,
     for (int i = 0; i < nlights; i++) {
         float a, b, c, d;
         in >> a >> b >> c >> d;
-        lights.push_back(d);
         lights.push_back(a);
         lights.push_back(b);
         lights.push_back(c);
+        lights.push_back(d);
     }
 }
 
@@ -152,7 +152,7 @@ void LitMesh::initShaders() {
 
 
 void LitMesh::computeLighting() {
-    c.resize(v.size());
+    c.resize(v.size(),0);
     for (int i = 0; i < v.size(); i+=3) {
         for (int j = 0; j < l.size(); j+=4) {
             float LdotL = 0;
@@ -164,7 +164,7 @@ void LitMesh::computeLighting() {
             }
             ndotLn /= sqrt(LdotL);
             float color = ndotLn>0?l[j+3]*ndotLn/LdotL:0;
-            for (int k = 0; k < 3; k++) c[i+k] = color;
+            for (int k = 0; k < 3; k++) c[i+k] += color;
         }
     }
 }
