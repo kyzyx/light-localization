@@ -37,6 +37,7 @@ enum {
     NUM_PROGS,
 };
 GLuint progs[NUM_PROGS];
+float exposure;
 
 bool shouldExitImmediately = false;
 bool shouldWriteExrFile = false;
@@ -46,19 +47,13 @@ string pngFilename, plyFilename, exrFilename;
 
 void keydown(unsigned char key, int x, int y) {
     if (key == ',') {
-        GLuint loc = glGetUniformLocation(progs[currprog], "exposure");
-        float exposure;
-        glGetUniformfv(progs[currprog], loc, &exposure);
-        if (exposure > 0.05) {
-            glUniform1f(loc, exposure-0.05);
-            planemanager->setExposure(exposure-0.05);
+        if (exposure > 0.5) {
+            exposure -= 0.5;
+            planemanager->setExposure(exposure);
         }
     } else if (key == '.') {
-        GLuint loc = glGetUniformLocation(progs[currprog], "exposure");
-        float exposure;
-        glGetUniformfv(progs[currprog], loc, &exposure);
-        glUniform1f(loc, exposure+0.05);
-        planemanager->setExposure(exposure+0.05);
+        exposure += 0.5;
+        planemanager->setExposure(exposure+0.5);
     } else if (key == 'm') {
         currprog = (currprog+1)%NUM_PROGS;
     } else if (key == ' ') {
@@ -155,6 +150,7 @@ void drawField() {
             shouldWriteExrFile = false;
         }
     }
+    glUseProgram(progs[currprog]);
     glBindVertexArray(vao);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, tex);
@@ -169,7 +165,7 @@ void drawField() {
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     }
-    glUseProgram(progs[currprog]);
+    glUniform1f(glGetUniformLocation(progs[currprog], "exposure"), exposure);
     glDrawArrays(GL_TRIANGLES,0,6);
     glBindTexture(GL_TEXTURE_2D, 0);
     glBindVertexArray(0);
@@ -241,7 +237,7 @@ void setupProg(const char* fshader, int n) {
     glUniform1i(glGetUniformLocation(progs[n], "buffer"), 0);
     glUniform1i(glGetUniformLocation(progs[n], "aux"), 1);
     glUniform2i(glGetUniformLocation(progs[n], "dim"), width, height);
-    glUniform1f(glGetUniformLocation(progs[n], "exposure"), 0.5);
+    glUniform1f(glGetUniformLocation(progs[n], "exposure"), exposure);
     glUniform1i(glGetUniformLocation(progs[n], "threshold"), 8);
 }
 
@@ -318,6 +314,7 @@ int main(int argc, char** argv) {
     gluPerspective(45,width3d/(float)height3d, 0.001f, 100.f);
     trackball(curquat, 0.0, 0.0, 0.0, 0.0);
     camdist = 4;
+    exposure = 10;
 
     imagedata = new unsigned char[3*width*height*displayscale*displayscale];
     distancefield = new float[2*width*height];
@@ -362,6 +359,7 @@ int main(int argc, char** argv) {
         if (shouldExitImmediately) shouldWritePlyFile = true;
     }
     planemanager = new PlaneManager();
+    planemanager->setExposure(exposure);
 
     Cudamap_compute(&cudamap, distancefield, planemanager->normal(), planemanager->axis(), planemanager->point());
 

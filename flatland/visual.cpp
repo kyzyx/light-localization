@@ -306,6 +306,7 @@ enum {
     PROG_LOCALMIN = 10,
 };
 GLuint progs[NUM_PROGS];
+float exposure;
 
 int selectedlight = -1;
 int dragging = 0;
@@ -414,16 +415,9 @@ string pngFilename, plyFilename, exrFilename;
 
 void keydown(unsigned char key, int x, int y) {
     if (key == ',') {
-        GLuint loc = glGetUniformLocation(progs[currprog], "exposure");
-        float exposure;
-        glGetUniformfv(progs[currprog], loc, &exposure);
-        if (exposure > 0.05)
-            glUniform1f(loc, exposure-0.05);
+        if (exposure > 0.05) exposure -= 0.05;
     } else if (key == '.') {
-        GLuint loc = glGetUniformLocation(progs[currprog], "exposure");
-        float exposure;
-        glGetUniformfv(progs[currprog], loc, &exposure);
-        glUniform1f(loc, exposure+0.05);
+        exposure += 0.05;
     } else if (key == 'm') {
         currprog = (currprog+1)%NUM_PROGS;
     } else if (key == ' ') {
@@ -533,7 +527,6 @@ void draw() {
     if (currprog == PROG_SOURCEMAP || currprog == PROG_MEDIALAXIS) {
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glUniform1i(glGetUniformLocation(progs[currprog], "maxidx"), s.numSurfels());
     } else {
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -552,6 +545,10 @@ void draw() {
         glBindTexture(GL_TEXTURE_2D, tex);
     }
     glUseProgram(progs[currprog]);
+    if (currprog == PROG_SOURCEMAP || currprog == PROG_MEDIALAXIS) {
+        glUniform1i(glGetUniformLocation(progs[currprog], "maxidx"), s.numSurfels());
+    }
+    glUniform1f(glGetUniformLocation(progs[currprog], "exposure"), exposure);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, auxtex);
     glDrawArrays(GL_TRIANGLES,0,6);
@@ -626,13 +623,13 @@ void setupProg(const char* fshader, int n) {
     ShaderProgram* prog;
     prog = new FileShaderProgram("tboshader.v.glsl", fshader);
     prog->init();
-    delete prog;
     progs[n] = prog->getProgId();
+    delete prog;
     glUseProgram(progs[n]);
     glUniform1i(glGetUniformLocation(progs[n], "buffer"), 0);
     glUniform1i(glGetUniformLocation(progs[n], "aux"), 1);
     glUniform2i(glGetUniformLocation(progs[n], "dim"), width, height);
-    glUniform1f(glGetUniformLocation(progs[n], "exposure"), 0.5);
+    glUniform1f(glGetUniformLocation(progs[n], "exposure"), exposure);
     glUniform1i(glGetUniformLocation(progs[n], "threshold"), 8);
 }
 
@@ -707,6 +704,8 @@ int main(int argc, char** argv) {
     initCudaGlTextures();
     initRenderTextures();
     setupFullscreenQuad();
+
+    exposure = 0.5;
 
     setupProg("tboshader.f.glsl",PROG_ID);
     //setupProg("grad.f.glsl",PROG_GRAD);
