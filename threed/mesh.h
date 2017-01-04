@@ -12,19 +12,12 @@ class LitMesh {
         void Render();
         void RenderLights(float radius=0.01f);
 
-        void cudaInit(int w, int h) {
-            cm->w = w;
-            cm->h = h;
-            cm->n = v.size();
-            Cudamap_init(cm, v.data(), n.data());
-        }
-
+        void cudaInit(int w, int h);
         void addLight(float intensity, float x, float y, float z) {
             l.push_back(x);
             l.push_back(y);
             l.push_back(z);
             l.push_back(intensity);
-            Cudamap_addLight(cm, intensity, x, y, z);
         };
 
         int NLights() const { return l.size()/4; }

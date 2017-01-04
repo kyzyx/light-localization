@@ -66,14 +66,20 @@ void LitMesh::ReadFromPly(const char* filename) {
     for (int i = 0; i < nlights; i++) {
         float a, b, c, d;
         in >> a >> b >> c >> d;
-        l.push_back(a);
-        l.push_back(b);
-        l.push_back(c);
-        l.push_back(d);
+        addLight(d,a,b,c);
     }
 
     computeLighting();
     initOpenGL();
+}
+void LitMesh::cudaInit(int w, int h) {
+    cm->w = w;
+    cm->h = h;
+    cm->n = v.size()/3;
+    Cudamap_init(cm, v.data(), n.data());
+    for (int i = 0; i < l.size(); i += 4) {
+        Cudamap_addLight(cm, l[i+3], l[i], l[i+1], l[i+2]);
+    }
 }
 
 void LitMesh::initShaders() {
@@ -143,12 +149,13 @@ void LitMesh::Render() {
     GLfloat modelview[16];
     GLfloat projection[16];
 
+    glUseProgram(meshprogid);
+
     glGetFloatv(GL_MODELVIEW_MATRIX, modelview);
     glGetFloatv(GL_PROJECTION_MATRIX, projection);
     glUniformMatrix4fv(meshprojectionmatrixuniform, 1, GL_FALSE, projection);
     glUniformMatrix4fv(meshmvmatrixuniform, 1, GL_FALSE, modelview);
 
-    glUseProgram(meshprogid);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);

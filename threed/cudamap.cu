@@ -81,8 +81,8 @@ __global__ void cuCompute(
 
         // Computation
         float3 axis2 = cross(plane_normal, plane_axis);
-        float2 pix = make_float2(blockIdx.y/(float)blockDim.y, blockIdx.z/(float)blockDim.z);
-        float3 p = pix.x*plane_axis + pix.y*axis2;
+        float2 pix = make_float2(blockIdx.y/(float)w, blockIdx.z/(float)h);
+        float3 p = plane_point + pix.x*plane_axis + pix.y*axis2;
         float3 L = p - pos;
         float LdotL = dot(L,L);
         float ndotLn = dot(norm, L)/sqrt(LdotL);

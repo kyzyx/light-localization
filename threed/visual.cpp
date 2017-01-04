@@ -11,8 +11,8 @@
 #include "mesh.h"
 #include "trackball.h"
 
-int width = 400;
-int height = 400;
+int width = 300;
+int height = 300;
 int width3d = 600;
 int height3d = 600;
 int displayscale = 2;
@@ -21,7 +21,7 @@ float* distancefield;
 
 using namespace std;
 
-PlaneManager planemanager;
+PlaneManager* planemanager;
 Cudamap cudamap;
 LitMesh* mesh;
 
@@ -49,13 +49,16 @@ void keydown(unsigned char key, int x, int y) {
         GLuint loc = glGetUniformLocation(progs[currprog], "exposure");
         float exposure;
         glGetUniformfv(progs[currprog], loc, &exposure);
-        if (exposure > 0.05)
+        if (exposure > 0.05) {
             glUniform1f(loc, exposure-0.05);
+            planemanager->setExposure(exposure-0.05);
+        }
     } else if (key == '.') {
         GLuint loc = glGetUniformLocation(progs[currprog], "exposure");
         float exposure;
         glGetUniformfv(progs[currprog], loc, &exposure);
         glUniform1f(loc, exposure+0.05);
+        planemanager->setExposure(exposure+0.05);
     } else if (key == 'm') {
         currprog = (currprog+1)%NUM_PROGS;
     } else if (key == ' ') {
@@ -63,11 +66,14 @@ void keydown(unsigned char key, int x, int y) {
         if (exrFilename.length()) shouldWriteExrFile = true;
         if (plyFilename.length()) shouldWritePlyFile = true;
     } else if (key == ']') {
-        planemanager.movePlane(0.01);
+        planemanager->movePlane(0.01);
+    Cudamap_compute(&cudamap, distancefield, planemanager->normal(), planemanager->axis(), planemanager->point());
     } else if (key == '[') {
-        planemanager.movePlane(-0.01);
+        planemanager->movePlane(-0.01);
+    Cudamap_compute(&cudamap, distancefield, planemanager->normal(), planemanager->axis(), planemanager->point());
     } else if (key == 'p') {
-        planemanager.togglePlane();
+        planemanager->togglePlane();
+    Cudamap_compute(&cudamap, distancefield, planemanager->normal(), planemanager->axis(), planemanager->point());
     } else if (key == 'h') {
         // cout << helpstring << endl;
     }
@@ -107,10 +113,7 @@ void mousemove(int x, int y) {
 }
 
 void draw3D() {
-    glClearColor(0.1f,0.1f,0.2f,1.f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     // Setup camera
-    glViewport(0,0,width3d,height3d);
     glMatrixMode(GL_MODELVIEW);
     glPushMatrix();
     glLoadIdentity();
@@ -123,6 +126,7 @@ void draw3D() {
     mesh->Render();
     //mesh->RenderLights();
     // Draw plane
+    glBindVertexArray(vao);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, tex);
     if (currprog == PROG_SOURCEMAP || currprog == PROG_MEDIALAXIS) {
@@ -134,16 +138,13 @@ void draw3D() {
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     }
-    glUseProgram(progs[currprog]);
-    glDisable(GL_CULL_FACE);
-    planemanager.Render();
+    planemanager->Render();
     glBindTexture(GL_TEXTURE_2D, 0);
+    glBindVertexArray(0);
     glPopMatrix();
-    glutSwapBuffers();
 }
 
 void drawField() {
-    Cudamap_compute(&cudamap, distancefield, planemanager.normal(), planemanager.axis(), planemanager.point());
     if (shouldWritePlyFile || shouldWriteExrFile) {
         if (shouldWritePlyFile) {
             outputPLY(plyFilename.c_str(), distancefield, width, height, NULL);
@@ -173,13 +174,22 @@ void drawField() {
     glBindTexture(GL_TEXTURE_2D, 0);
     glBindVertexArray(0);
     if (shouldWritePngFile) {
-        glReadPixels(0,0,width*displayscale, height*displayscale, GL_RGB, GL_UNSIGNED_BYTE, (void*) imagedata);
+        glReadPixels(width3d,0,width*displayscale, height*displayscale, GL_RGB, GL_UNSIGNED_BYTE, (void*) imagedata);
         outputPNG(pngFilename.c_str(), imagedata, width*displayscale, height*displayscale);
         shouldWritePngFile = false;
     }
     if (shouldExitImmediately) {
         exit(0);
     }
+}
+
+void draw() {
+    glClearColor(0.1f,0.1f,0.2f,1.f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glViewport(width3d,0,width*displayscale,height*displayscale);
+    drawField();
+    glViewport(0,0,width3d,height3d);
+    draw3D();
     glutSwapBuffers();
 }
 
@@ -292,24 +302,14 @@ int main(int argc, char** argv) {
     }
 
     glutInit(&argc, argv);
-    // -=-=-= SETUP 3D WINDOW =-=-=-
-    glutSetOption(GLUT_RENDERING_CONTEXT, GLUT_USE_CURRENT_CONTEXT);
     glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
-    glutInitWindowPosition(width*displayscale, 0);
-    glutInitWindowSize(width3d, height3d);
-    glutCreateWindow("3D View");
-    glutDisplayFunc(draw3D);
-    glutIdleFunc(draw3D);
+    glutInitWindowSize(width*displayscale+width3d, max(height*displayscale, height3d));
+    glutCreateWindow("Light Localization");
+    glutDisplayFunc(draw);
+    glutIdleFunc(draw);
+    glutKeyboardFunc(keydown);
     glutMouseFunc(mouse);
     glutMotionFunc(mousemove);
-
-    // -=-=-= SETUP FIELD WINDOW =-=-=-
-    //glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
-    //glutInitWindowSize(width*displayscale, height*displayscale);
-    //glutCreateWindow("Light Localization");
-    //glutDisplayFunc(drawField);
-    //glutIdleFunc(drawField);
-    //glutKeyboardFunc(keydown);
     openglInit();
 
     // -=-=-= SETUP OTHER STUFF=-=-=-
@@ -334,7 +334,7 @@ int main(int argc, char** argv) {
     if (options[INPUT_SCENEFILE]) {
         mesh = new LitMesh(&cudamap);
         mesh->ReadFromPly(options[INPUT_SCENEFILE].arg);
-        mesh->cudaInit(width3d,height3d);
+        mesh->cudaInit(width,height);
         Cudamap_setGLTexture(&cudamap, tex);
         Cudamap_setGLBuffer(&cudamap, pbo);
     } else {
@@ -361,6 +361,9 @@ int main(int argc, char** argv) {
         plyFilename = options[OUTPUT_MESHFILE].arg;
         if (shouldExitImmediately) shouldWritePlyFile = true;
     }
+    planemanager = new PlaneManager();
+
+    Cudamap_compute(&cudamap, distancefield, planemanager->normal(), planemanager->axis(), planemanager->point());
 
     glutMainLoop();
 }
