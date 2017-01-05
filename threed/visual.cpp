@@ -32,11 +32,10 @@ int currprog;
 enum {
     PROG_ID = 0,
     PROG_SOURCEMAP = 1,
-    PROG_MEDIALAXIS = 2,
     NUM_PROGS,
+    PROG_MEDIALAXIS = 2,
 };
-GLuint progs[NUM_PROGS];
-float exposure;
+GLuint progs[NUM_PROGS][2];
 
 bool shouldExitImmediately = false;
 bool shouldWriteExrFile = false;
@@ -46,13 +45,11 @@ string pngFilename, plyFilename, exrFilename;
 
 void keydown(unsigned char key, int x, int y) {
     if (key == ',') {
-        if (exposure > 0.5) {
-            exposure -= 0.5;
-            planemanager->setExposure(exposure);
+        if (planemanager->getExposure() > 0.5) {
+            planemanager->setExposure(planemanager->getExposure()-0.5);
         }
     } else if (key == '.') {
-        exposure += 0.5;
-        planemanager->setExposure(exposure+0.5);
+        planemanager->setExposure(planemanager->getExposure()+0.5);
     } else if (key == '=') {
         mesh->setExposure(mesh->getExposure()+0.05);
     } else if (key == '-') {
@@ -109,6 +106,22 @@ void mousemove(int x, int y) {
     }
 }
 
+void renderPlane(int progid) {
+    glBindVertexArray(vao);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_3D, tex);
+    if (currprog == PROG_SOURCEMAP || currprog == PROG_MEDIALAXIS) {
+        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    } else {
+        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    }
+    planemanager->Render(progid);
+    glBindTexture(GL_TEXTURE_3D, 0);
+    glBindVertexArray(0);
+}
+
 void draw3D() {
     // Setup camera
     glMatrixMode(GL_MODELVIEW);
@@ -122,64 +135,24 @@ void draw3D() {
 
     mesh->Render();
     mesh->RenderLights();
-    // Draw plane
-    glBindVertexArray(vao);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_3D, tex);
-    if (currprog == PROG_SOURCEMAP || currprog == PROG_MEDIALAXIS) {
-        // FIXME: Not correct for 3D!!!
-        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glUniform1i(glGetUniformLocation(progs[currprog], "maxidx"), cudamap.n);
-    } else {
-        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    }
-    planemanager->Render();
-    glBindTexture(GL_TEXTURE_3D, 0);
-    glBindVertexArray(0);
+    renderPlane(progs[currprog][1]);
     glPopMatrix();
 }
 
 void drawField() {
     if (shouldWritePlyFile || shouldWriteExrFile) {
+        float* imageplane = new float[2*width*height];
+        glGetTexImage(GL_TEXTURE_2D, 0, GL_RG, GL_FLOAT, imageplane);
         if (shouldWritePlyFile) {
-            outputPLY(plyFilename.c_str(), distancefield, width, height, NULL);
+            outputPLY(plyFilename.c_str(), imageplane, width, height, NULL);
             shouldWritePlyFile = false;
         }
         if (shouldWriteExrFile) {
-            outputEXR(exrFilename.c_str(), distancefield, width, height, 2);
+            outputEXR(exrFilename.c_str(), imageplane, width, height, 2);
             shouldWriteExrFile = false;
         }
     }
-    glUseProgram(progs[currprog]);
-    glBindVertexArray(vao);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_3D, tex);
-    //glBindTexture(GL_TEXTURE_BUFFER,tbo_tex);
-    //glTexBuffer(GL_TEXTURE_BUFFER,GL_R32F,pbo);
-    if (currprog == PROG_SOURCEMAP || currprog == PROG_MEDIALAXIS) {
-        // FIXME: Not correct for 3D!!!
-        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glUniform1i(glGetUniformLocation(progs[currprog], "maxidx"), cudamap.n);
-    } else {
-        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    }
-    glUniform1f(glGetUniformLocation(progs[currprog], "exposure"), exposure);
-
-    Eigen::Vector3f planePoint = planemanager->planePoint;
-    Eigen::Vector3f planeNormal = planemanager->planeNormal;
-    Eigen::Vector3f planeAxis = planemanager->planeAxis;
-    Eigen::Vector3f yax = planeNormal.cross(planeAxis);
-    glUniform3f(glGetUniformLocation(progs[currprog], "pt"), planePoint[0], planePoint[1], planePoint[2]);
-    glUniform3f(glGetUniformLocation(progs[currprog], "xax"), planeAxis[0], planeAxis[1], planeAxis[2]);
-    glUniform3f(glGetUniformLocation(progs[currprog], "yax"), yax[0], yax[1], yax[2]);
-
-    glDrawArrays(GL_TRIANGLES,0,6);
-    glBindTexture(GL_TEXTURE_3D, 0);
-    glBindVertexArray(0);
+    renderPlane(progs[currprog][0]);
     if (shouldWritePngFile) {
         glReadPixels(width3d,0,width, height, GL_RGB, GL_UNSIGNED_BYTE, (void*) imagedata);
         outputPNG(pngFilename.c_str(), imagedata, width, height);
@@ -221,17 +194,18 @@ void initRenderTextures() {
 }
 
 void setupProg(const char* fshader, int n) {
-    ShaderProgram* prog;
-    prog = new FileShaderProgram("tboshader.v.glsl", fshader);
-    prog->init();
-    progs[n] = prog->getProgId();
-    delete prog;
-    glUseProgram(progs[n]);
-    glUniform1i(glGetUniformLocation(progs[n], "buffer"), 0);
-    glUniform1i(glGetUniformLocation(progs[n], "aux"), 1);
-    glUniform2i(glGetUniformLocation(progs[n], "dim"), width, height);
-    glUniform1f(glGetUniformLocation(progs[n], "exposure"), exposure);
-    glUniform1i(glGetUniformLocation(progs[n], "threshold"), 8);
+    const char* shaders[] = {"tboshader.v.glsl", "texplane.v.glsl"};
+    for (int i = 0; i < 2; i++) {
+        ShaderProgram* prog;
+        prog = new FileShaderProgram(shaders[i], fshader);
+        prog->init();
+        progs[n][i] = prog->getProgId();
+        delete prog;
+        glUseProgram(progs[n][i]);
+        glUniform1i(glGetUniformLocation(progs[n][i], "buffer"), 0);
+        glUniform2i(glGetUniformLocation(progs[n][i], "dim"), width, height);
+        glUniform1i(glGetUniformLocation(progs[n][i], "threshold"), 8);
+    }
 }
 
 void setupFullscreenQuad() {
@@ -303,7 +277,6 @@ int main(int argc, char** argv) {
     gluPerspective(45,width3d/(float)height3d, 0.001f, 100.f);
     trackball(curquat, 0.0, 0.0, 0.0, 0.0);
     camdist = 4;
-    exposure = 10;
 
     imagedata = new unsigned char[3*width*height];
     distancefield = new float[2*width*width*width];
@@ -313,7 +286,7 @@ int main(int argc, char** argv) {
 
     setupProg("tboshader.f.glsl",PROG_ID);
     setupProg("sourcemap.f.glsl",PROG_SOURCEMAP);
-    setupProg("medialaxis.f.glsl",PROG_MEDIALAXIS);
+    //setupProg("medialaxis.f.glsl",PROG_MEDIALAXIS);
     currprog = 0;
 
     int dim = 256;
@@ -345,7 +318,6 @@ int main(int argc, char** argv) {
         if (shouldExitImmediately) shouldWritePlyFile = true;
     }
     planemanager = new PlaneManager();
-    planemanager->setExposure(exposure);
 
     if (options[INPUT_VOLUME]) {
         ifstream in(options[INPUT_VOLUME].arg, ios::in | ios::binary);

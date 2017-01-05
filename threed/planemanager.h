@@ -10,8 +10,9 @@ class PlaneManager {
         PlaneManager();
         void movePlane(float amount);
         void togglePlane();
-        void Render();
+        void Render(GLuint progid);
         void setExposure(float e) { exposure = e; }
+        float getExposure() const { return exposure; }
 
         const float* point() const { return planePoint.data(); }
         const float* normal() const { return planeNormal.data(); }
@@ -19,16 +20,10 @@ class PlaneManager {
 
         Eigen::Vector3f planePoint, planeNormal, planeAxis;
     private:
-        void initShaders();
-
         std::vector<Eigen::Vector3f> default_points;
         std::vector<Eigen::Vector3f> default_normals;
         std::vector<Eigen::Vector3f> default_axes;
         int planeidx;
-
         float exposure;
-        GLuint progid;
-        GLuint expuniform, puniform, xaxuniform, yaxuniform;
-        GLuint mvmatrixuniform, projectionmatrixuniform;
 };
 #endif
