@@ -73,7 +73,13 @@ __global__ void cuCompute(
         float3 pos = surfel_pos[surfaceIdx];
         float3 norm = surfel_normal[surfaceIdx];
 
-        mini[tid].y = __int_as_float(surfaceIdx);
+        float3 r = make_float3(pos.x-0.5, pos.y-0.5, pos.z-0.5);
+        float phi = atan2(r.y, r.x);
+        if (phi < 0) phi += 2*M_PI;
+        float theta = acos(r.z/sqrt(dot(r,r)));
+        unsigned int iphi = (1<<15)*phi/(2*M_PI);
+        unsigned int itheta = (1<<15)*theta/(M_PI);
+        mini[tid].y = __int_as_float((iphi<<15)|itheta);
 
         // Computation
         float3 p = make_float3(
