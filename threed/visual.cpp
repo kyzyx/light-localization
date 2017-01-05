@@ -32,8 +32,8 @@ int currprog;
 enum {
     PROG_ID = 0,
     PROG_SOURCEMAP = 1,
-    NUM_PROGS,
     PROG_MEDIALAXIS = 2,
+    NUM_PROGS,
 };
 GLuint progs[NUM_PROGS][2];
 
@@ -204,7 +204,7 @@ void setupProg(const char* fshader, int n) {
         glUseProgram(progs[n][i]);
         glUniform1i(glGetUniformLocation(progs[n][i], "buffer"), 0);
         glUniform2i(glGetUniformLocation(progs[n][i], "dim"), width, height);
-        glUniform1i(glGetUniformLocation(progs[n][i], "threshold"), 8);
+        glUniform1f(glGetUniformLocation(progs[n][i], "threshold"), M_PI/30);
     }
 }
 
@@ -286,7 +286,7 @@ int main(int argc, char** argv) {
 
     setupProg("tboshader.f.glsl",PROG_ID);
     setupProg("sourcemap.f.glsl",PROG_SOURCEMAP);
-    //setupProg("medialaxis.f.glsl",PROG_MEDIALAXIS);
+    setupProg("medialaxis.f.glsl",PROG_MEDIALAXIS);
     currprog = 0;
 
     int dim = 256;
