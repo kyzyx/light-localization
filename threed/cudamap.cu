@@ -59,7 +59,7 @@ __global__ void cuCompute(
         float3* surfel_normal,
         int n,
         float2* field,
-        int w, int zcoord)
+        int w, int ycoord, int zcoord)
 {
     __shared__ float2 mini[BLOCK_SIZE];
 
@@ -84,7 +84,7 @@ __global__ void cuCompute(
         // Computation
         float3 p = make_float3(
                 (blockIdx.y + 0.5)/(float)w,
-                (blockIdx.z + 0.5)/(float)w,
+                (ycoord + 0.5)/(float)w,
                 (zcoord + 0.5)/(float)w
             );
         float3 L = p - pos;
@@ -136,7 +136,7 @@ __global__ void cuCompute(
 
     // Final data copy
     if (tid == 0) {
-        atomicMin2(field+zcoord*w*w+blockIdx.z*w+blockIdx.y, mini[0]);
+        atomicMin2(field+zcoord*w*w+ycoord*w+blockIdx.y, mini[0]);
     }
 }
 void Cudamap_init(Cudamap* cudamap, const float* surfel_pos, const float* surfel_normal) {
@@ -183,15 +183,18 @@ void Cudamap_compute(Cudamap* cudamap, float* field)
     cudaMemcpy(cudamap->d_field, field, sizeof(float2)*w*w*w, cudaMemcpyHostToDevice);
 
     dim3 threads(BLOCK_SIZE, 1, 1);
-    dim3 blocks((n+BLOCK_SIZE-1)/BLOCK_SIZE, w, w);
+    dim3 blocks((n+BLOCK_SIZE-1)/BLOCK_SIZE, w, 1);
 
     for (int i = 0; i < w; i++) {
-        cuCompute<BLOCK_SIZE><<< blocks, threads >>>(
-                cudamap->d_intensities,
-                cudamap->d_surfel_pos,
-                cudamap->d_surfel_normal,
-                n, cudamap->d_field, w, i);
+        for (int j = 0; j < w; j++) {
+            cuCompute<BLOCK_SIZE><<< blocks, threads >>>(
+                    cudamap->d_intensities,
+                    cudamap->d_surfel_pos,
+                    cudamap->d_surfel_normal,
+                    n, cudamap->d_field, w, i, j);
+        }
         printf("Done %d/%d\n", i, w);
+        cudaDeviceSynchronize();
     }
 
     cudaMemcpy(field, cudamap->d_field, sizeof(float2)*w*w*w, cudaMemcpyDeviceToHost);

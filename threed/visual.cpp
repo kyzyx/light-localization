@@ -291,7 +291,7 @@ int main(int argc, char** argv) {
     setupProg("medialaxis.f.glsl",PROG_MEDIALAXIS);
     currprog = 0;
 
-    int dim = 256;
+    int dim = 512;
     if (options[INPUT_SCENEFILE]) {
         mesh = new LitMesh(&cudamap);
         mesh->ReadFromPly(options[INPUT_SCENEFILE].arg);
@@ -332,7 +332,9 @@ int main(int argc, char** argv) {
         in.close();
         mesh->cudaInit(dim);
     } else {
+        cout << "Computing lighting..." << endl;
         mesh->cudaInit(dim);
+        cout << "Done." << endl;
         cout << "Computing field..." << endl;
         Cudamap_compute(&cudamap, distancefield);
         cout << "Done." << endl;
