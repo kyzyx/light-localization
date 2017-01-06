@@ -301,9 +301,10 @@ enum {
     PROG_SOURCEMAP = 1,
     PROG_VORONOI = 2,
     PROG_MEDIALAXIS = 3,
+    PROG_DENSITY = 4,
     NUM_PROGS,
-    PROG_GRAD = 4,
-    PROG_LAPLACIAN = 5,
+    PROG_GRAD = 5,
+    PROG_LAPLACIAN = 6,
     PROG_LOCALMIN = 10,
 };
 GLuint progs[NUM_PROGS];
@@ -525,7 +526,7 @@ void draw() {
     //glBindTexture(GL_TEXTURE_BUFFER,tbo_tex);
     //glTexBuffer(GL_TEXTURE_BUFFER,GL_R32F,pbo);
     //
-    if (currprog == PROG_SOURCEMAP || currprog == PROG_VORONOI || currprog == PROG_MEDIALAXIS) {
+    if (currprog == PROG_SOURCEMAP || currprog == PROG_VORONOI || currprog == PROG_MEDIALAXIS || currprog == PROG_DENSITY) {
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     } else {
@@ -546,7 +547,7 @@ void draw() {
         glBindTexture(GL_TEXTURE_2D, tex);
     }
     glUseProgram(progs[currprog]);
-    if (currprog == PROG_SOURCEMAP || currprog == PROG_VORONOI || currprog == PROG_MEDIALAXIS) {
+    if (currprog == PROG_SOURCEMAP || currprog == PROG_VORONOI || currprog == PROG_MEDIALAXIS || currprog == PROG_DENSITY) {
         glUniform1i(glGetUniformLocation(progs[currprog], "maxidx"), s.numSurfels());
     }
     glUniform1f(glGetUniformLocation(progs[currprog], "exposure"), exposure);
@@ -631,7 +632,7 @@ void setupProg(const char* fshader, int n) {
     glUniform1i(glGetUniformLocation(progs[n], "aux"), 1);
     glUniform2i(glGetUniformLocation(progs[n], "dim"), width, height);
     glUniform1f(glGetUniformLocation(progs[n], "exposure"), exposure);
-    glUniform1i(glGetUniformLocation(progs[n], "threshold"), 8);
+    glUniform1i(glGetUniformLocation(progs[n], "threshold"), 10);
 }
 
 void setupFullscreenQuad() {
@@ -715,6 +716,7 @@ int main(int argc, char** argv) {
     setupProg("sourcemap.f.glsl",PROG_SOURCEMAP);
     setupProg("voronoi.f.glsl",PROG_VORONOI);
     setupProg("medialaxis.f.glsl",PROG_MEDIALAXIS);
+    setupProg("density.f.glsl",PROG_DENSITY);
     currprog = 0;
 
     if (options[INPUT_SCENEFILE]) {
