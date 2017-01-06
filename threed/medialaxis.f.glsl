@@ -5,7 +5,6 @@ uniform sampler3D buffer;
 uniform ivec2 dim;
 uniform float exposure;
 uniform float threshold;
-uniform int maxidx;
 
 const float PI = 3.1415926536;
 
@@ -54,7 +53,7 @@ float medialaxis(vec3 stu) {
     ret += angle(v, getNorm(stu+vec3(a,a,-a)))>threshold?1.f:0.f;
     ret += angle(v, getNorm(stu+vec3(a,a,0)))>threshold?1.f:0.f;
     ret += angle(v, getNorm(stu+vec3(a,a,a)))>threshold?1.f:0.f;
-    return ret;
+    return ret/27.f;
 }
 
 void main() {

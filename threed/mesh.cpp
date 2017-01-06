@@ -242,7 +242,7 @@ void LitMesh::RenderLights(float radius) {
     for (int i = 0; i < l.size(); i += 4) {
         glPushMatrix();
         glTranslatef(l[i], l[i+1], l[i+2]);
-        glScalef(5.f,5.f,5.f);
+        glScalef(3.f,3.f,3.f);
         glGetFloatv(GL_MODELVIEW_MATRIX, modelview);
         glGetFloatv(GL_PROJECTION_MATRIX, projection);
         glUniformMatrix4fv(lightprojectionmatrixuniform, 1, GL_FALSE, projection);
