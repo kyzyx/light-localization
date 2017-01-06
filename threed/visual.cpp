@@ -3,6 +3,7 @@
 #include <vector>
 #include <fstream>
 
+#include "extract.h"
 #include "planemanager.h"
 #include "loadshader.h"
 #include "cudamap.h"
@@ -134,6 +135,7 @@ void draw3D() {
     glTranslatef(-0.5,-0.5,-0.5);
 
     mesh->Render();
+    mesh->RenderPointcloud();
     mesh->RenderLights();
     renderPlane(progs[currprog][1]);
     glPopMatrix();
@@ -346,6 +348,9 @@ int main(int argc, char** argv) {
         }
         out.close();
     }
+    extract(mesh->pc, distancefield, dim, 6);
+    cout << mesh->pc.size() << endl;
+    mesh->updatePointcloud();
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_3D, tex);
     glTexImage3D(GL_TEXTURE_3D, 0, GL_RG32F, dim, dim, dim, 0, GL_RG, GL_FLOAT, distancefield);

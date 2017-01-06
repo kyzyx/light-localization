@@ -78,6 +78,19 @@ void readPly(const char* filename,
     }
 }
 
+void LitMesh::updatePointcloud() {
+    GLuint vbo;
+    glGenVertexArrays(1, &pcao);
+    glGenBuffers(1, &vbo);
+    glBindVertexArray(pcao);
+    glEnableVertexAttribArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, pc.size()*sizeof(float), pc.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+}
+
 void initAO(GLuint* vao,
         int nv, const float* pos, const float* normal,
         int nf, const unsigned int* faces,
@@ -147,6 +160,14 @@ void LitMesh::initShaders() {
     lightmvmatrixuniform = glGetUniformLocation(lightprogid, "modelviewmatrix");
     lightprojectionmatrixuniform = glGetUniformLocation(lightprogid, "projectionmatrix");
     delete lightprog;
+
+    ShaderProgram* pointprog = new FileShaderProgram("pointcloud.v.glsl", "pointcloud.f.glsl");
+    pointprog->init();
+    pointprogid = pointprog->getProgId();
+    pointmvmatrixuniform = glGetUniformLocation(pointprogid, "modelviewmatrix");
+    pointprojectionmatrixuniform = glGetUniformLocation(pointprogid, "projectionmatrix");
+    pointexpuniform = glGetUniformLocation(pointprogid, "exposure");
+    delete pointprog;
 }
 
 
@@ -186,6 +207,26 @@ void LitMesh::Render() {
     glDisable(GL_LIGHTING);
     glBindVertexArray(meshao);
     glDrawElements(GL_TRIANGLES, f.size(), GL_UNSIGNED_INT, 0);
+    glBindVertexArray(0);
+}
+
+void LitMesh::RenderPointcloud() {
+    GLfloat modelview[16];
+    GLfloat projection[16];
+
+    glPointSize(2.f);
+    glUseProgram(pointprogid);
+
+    glGetFloatv(GL_MODELVIEW_MATRIX, modelview);
+    glGetFloatv(GL_PROJECTION_MATRIX, projection);
+    glUniformMatrix4fv(pointprojectionmatrixuniform, 1, GL_FALSE, projection);
+    glUniformMatrix4fv(pointmvmatrixuniform, 1, GL_FALSE, modelview);
+    glUniform1f(pointexpuniform, exposure);
+
+    glEnable(GL_DEPTH_TEST);
+    glDisable(GL_LIGHTING);
+    glBindVertexArray(pcao);
+    glDrawArrays(GL_POINTS, 0, pc.size()/4);
     glBindVertexArray(0);
 }
 

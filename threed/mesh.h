@@ -10,6 +10,7 @@ class LitMesh {
         ~LitMesh();
         void ReadFromPly(const char* filename);
         void Render();
+        void RenderPointcloud();
         void RenderLights(float radius=0.01f);
 
         void cudaInit(int dim);
@@ -19,6 +20,7 @@ class LitMesh {
             l.push_back(z);
             l.push_back(intensity);
         };
+        void updatePointcloud();
 
         float getExposure() const { return exposure; }
         float setExposure(float e) { exposure = e; }
@@ -27,6 +29,8 @@ class LitMesh {
         const float* vertices() const { return v.data(); }
         const float* normals() const { return n.data(); }
         const float* lights() const { return l.data(); }
+
+        std::vector<float> pc;
     private:
         void initShaders();
         void computeLighting();
@@ -40,10 +44,12 @@ class LitMesh {
 
         float exposure;
 
+        GLuint pcao;
         GLuint meshao;
-        GLuint meshprogid, lightprogid;
+        GLuint meshprogid, lightprogid, pointprogid;
         GLuint sphereao, numspherefaces;
         GLuint meshmvmatrixuniform, meshprojectionmatrixuniform, meshexpuniform;
         GLuint lightmvmatrixuniform, lightprojectionmatrixuniform;
+        GLuint pointmvmatrixuniform, pointprojectionmatrixuniform, pointexpuniform;
 };
 #endif
