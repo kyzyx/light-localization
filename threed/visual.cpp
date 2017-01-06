@@ -294,6 +294,9 @@ int main(int argc, char** argv) {
     setupProg("sourcemap.f.glsl",PROG_SOURCEMAP);
     setupProg("medialaxis.f.glsl",PROG_MEDIALAXIS);
     currprog = 0;
+    if (options[MODE]) {
+        currprog = atoi(options[MODE].arg)%NUM_PROGS;
+    }
 
     int dim = 512;
     if (options[INPUT_SCENEFILE]) {

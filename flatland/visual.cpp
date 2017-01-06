@@ -718,6 +718,9 @@ int main(int argc, char** argv) {
     setupProg("medialaxis.f.glsl",PROG_MEDIALAXIS);
     setupProg("density.f.glsl",PROG_DENSITY);
     currprog = 0;
+    if (options[MODE]) {
+        currprog = atoi(options[MODE].arg)%NUM_PROGS;
+    }
 
     if (options[INPUT_SCENEFILE]) {
         ifstream in(options[INPUT_SCENEFILE].arg);
