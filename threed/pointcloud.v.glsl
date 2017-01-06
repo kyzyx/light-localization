@@ -6,5 +6,6 @@ out vec3 vcolor;
 
 void main() {
    gl_Position = projectionmatrix*modelviewmatrix*vec4(pos.xyz,1);
-   vcolor = vec3(pos.w, pos.w, pos.w);
+   float f = 30*pos.w;
+   vcolor = vec3(0, f, f);
 }

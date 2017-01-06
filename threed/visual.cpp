@@ -348,7 +348,8 @@ int main(int argc, char** argv) {
         }
         out.close();
     }
-    extract(mesh->pc, distancefield, dim, 6);
+    Extractor ex(distancefield, dim);
+    ex.extract(mesh->pc, M_PI/30);
     cout << mesh->pc.size() << endl;
     mesh->updatePointcloud();
     glGenTextures(1, &tex);
