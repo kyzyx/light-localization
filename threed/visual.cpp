@@ -44,6 +44,8 @@ bool shouldWritePngFile = false;
 bool shouldWritePlyFile = false;
 string pngFilename, plyFilename, exrFilename;
 
+bool renderlights = true;
+
 void keydown(unsigned char key, int x, int y) {
     if (key == ',') {
         if (planemanager->getExposure() > 0.5) {
@@ -69,6 +71,8 @@ void keydown(unsigned char key, int x, int y) {
         planemanager->movePlane(-0.01);
     } else if (key == 'p') {
         planemanager->togglePlane();
+    } else if (key == 'l') {
+        renderlights = !renderlights;
     } else if (key == 'h') {
         // cout << helpstring << endl;
     }
@@ -136,7 +140,7 @@ void draw3D() {
 
     mesh->Render();
     mesh->RenderPointcloud();
-    mesh->RenderLights();
+    if (renderlights) mesh->RenderLights();
     renderPlane(progs[currprog][1]);
     glPopMatrix();
 }
