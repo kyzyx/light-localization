@@ -5,7 +5,7 @@ uniform mat4 projectionmatrix;
 out vec3 vcolor;
 
 void main() {
-   gl_Position = projectionmatrix*modelviewmatrix*vec4(pos.xyz,1);
-   float f = 30*pos.w;
-   vcolor = vec3(0.2, 0.2+f, 0.2+f);
+   vec4 p = modelviewmatrix*vec4(pos.xyz,1);
+   gl_Position = projectionmatrix*p;
+   vcolor = vec3(-p.z, -p.z, -p.z);
 }

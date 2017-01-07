@@ -167,6 +167,14 @@ void LitMesh::initShaders() {
     pointmvmatrixuniform = glGetUniformLocation(pointprogid, "modelviewmatrix");
     pointprojectionmatrixuniform = glGetUniformLocation(pointprogid, "projectionmatrix");
     pointexpuniform = glGetUniformLocation(pointprogid, "exposure");
+    pointdimuniform = glGetUniformLocation(pointprogid, "dim");
+    pointfocuniform = glGetUniformLocation(pointprogid, "foc");
+    delete pointprog;
+    pointprog = new FileShaderProgram("pointdepth.v.glsl", "pass.f.glsl");
+    pointprog->init();
+    pointdepthprogid = pointprog->getProgId();
+    pointdepthmvmatrixuniform = glGetUniformLocation(pointdepthprogid, "modelviewmatrix");
+    pointdepthprojectionmatrixuniform = glGetUniformLocation(pointdepthprogid, "projectionmatrix");
     delete pointprog;
 }
 
@@ -210,11 +218,30 @@ void LitMesh::Render() {
     glBindVertexArray(0);
 }
 
-void LitMesh::RenderPointcloud() {
+void LitMesh::RenderPointcloudDepth(float pointsize) {
     GLfloat modelview[16];
     GLfloat projection[16];
 
-    glPointSize(2.f);
+    glPointSize(pointsize);
+    glUseProgram(pointdepthprogid);
+
+    glGetFloatv(GL_MODELVIEW_MATRIX, modelview);
+    glGetFloatv(GL_PROJECTION_MATRIX, projection);
+    glUniformMatrix4fv(pointdepthprojectionmatrixuniform, 1, GL_FALSE, projection);
+    glUniformMatrix4fv(pointdepthmvmatrixuniform, 1, GL_FALSE, modelview);
+    glUniform1f(glGetUniformLocation(pointdepthprogid, "exposure"), 1.f);
+
+    glEnable(GL_DEPTH_TEST);
+    glDisable(GL_LIGHTING);
+    glBindVertexArray(pcao);
+    glDrawArrays(GL_POINTS, 0, pc.size()/4);
+    glBindVertexArray(0);
+}
+void LitMesh::RenderPointcloud(float pointsize) {
+    GLfloat modelview[16];
+    GLfloat projection[16];
+
+    glPointSize(pointsize);
     glUseProgram(pointprogid);
 
     glGetFloatv(GL_MODELVIEW_MATRIX, modelview);
@@ -222,6 +249,8 @@ void LitMesh::RenderPointcloud() {
     glUniformMatrix4fv(pointprojectionmatrixuniform, 1, GL_FALSE, projection);
     glUniformMatrix4fv(pointmvmatrixuniform, 1, GL_FALSE, modelview);
     glUniform1f(pointexpuniform, exposure);
+    glUniform1i(pointdimuniform, 600);
+    glUniform1f(pointfocuniform, 600/(2*tan(M_PI/8)));
 
     glEnable(GL_DEPTH_TEST);
     glDisable(GL_LIGHTING);

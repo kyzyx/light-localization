@@ -138,6 +138,13 @@ void draw3D() {
     glMultMatrixf(&m[0][0]);
     glTranslatef(-0.5,-0.5,-0.5);
 
+    glBindFramebuffer(GL_FRAMEBUFFER, rfr_fbo);
+    glClearColor(0.f,0.f,0.f,1.f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    mesh->RenderPointcloudDepth(2.f);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, rfr_tex);
     mesh->Render();
     mesh->RenderPointcloud();
     if (renderlights) mesh->RenderLights();
@@ -184,12 +191,12 @@ void initRenderTextures() {
     glBindTexture(GL_TEXTURE_2D, rfr_tex);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, 0);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width3d, height3d, 0, GL_RGBA, GL_FLOAT, 0);
     glBindTexture(GL_TEXTURE_2D, 0);
 
     glGenRenderbuffers(1, &rfr_fbo_z);
     glBindRenderbuffer(GL_RENDERBUFFER, rfr_fbo_z);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width, height);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width3d, height3d);
     glBindRenderbuffer(GL_RENDERBUFFER, 0);
 
     glGenFramebuffers(1, &rfr_fbo);

@@ -10,7 +10,8 @@ class LitMesh {
         ~LitMesh();
         void ReadFromPly(const char* filename);
         void Render();
-        void RenderPointcloud();
+        void RenderPointcloud(float pointsize=2.f);
+        void RenderPointcloudDepth(float pointsize=2.f);
         void RenderLights(float radius=0.01f);
 
         void cudaInit(int dim);
@@ -46,10 +47,11 @@ class LitMesh {
 
         GLuint pcao;
         GLuint meshao;
-        GLuint meshprogid, lightprogid, pointprogid;
+        GLuint meshprogid, lightprogid, pointprogid, pointdepthprogid;
         GLuint sphereao, numspherefaces;
         GLuint meshmvmatrixuniform, meshprojectionmatrixuniform, meshexpuniform;
         GLuint lightmvmatrixuniform, lightprojectionmatrixuniform;
-        GLuint pointmvmatrixuniform, pointprojectionmatrixuniform, pointexpuniform;
+        GLuint pointmvmatrixuniform, pointprojectionmatrixuniform, pointexpuniform, pointdimuniform, pointfocuniform;
+        GLuint pointdepthmvmatrixuniform, pointdepthprojectionmatrixuniform;
 };
 #endif
