@@ -373,24 +373,29 @@ int main(int argc, char** argv) {
         ifstream in(options[INPUT_POINTCLOUD].arg);
         int n;
         in >> n;
+        string line;
+        getline(in, line);
         for (int i = 0; i < n; i++) {
-            for (int j = 0; j < 4; j++) {
+            getline(in, line);
+            stringstream sin(line);
+            for (int j = 0; j < 6; j++) {
                 float f;
-                in >> f;
-                mesh->pc.push_back(f);
+                sin >> f;
+                if (sin.fail()) mesh->pc.push_back(0);
+                else mesh->pc.push_back(f);
             }
         }
     } else {
         Extractor ex(distancefield, dim);
         ex.extract(mesh->pc, M_PI/30);
-        cout << "Medial surface: " << mesh->pc.size() << " points" << endl;
+        cout << "Medial surface: " << mesh->pc.size()/6 << " points" << endl;
     }
     mesh->updatePointcloud();
     if (options[OUTPUT_POINTCLOUD]) {
         ofstream out(options[OUTPUT_POINTCLOUD].arg);
-        out << mesh->pc.size()/4 << endl;
-        for (int i = 0; i < mesh->pc.size(); i+=4) {
-            for (int j = 0; j < 4; j++) out << mesh->pc[i+j] << " ";
+        out << mesh->pc.size()/6 << endl;
+        for (int i = 0; i < mesh->pc.size(); i+=6) {
+            for (int j = 0; j < 6; j++) out << mesh->pc[i+j] << " ";
             out << endl;
         }
     }

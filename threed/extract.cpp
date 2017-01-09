@@ -2,6 +2,7 @@
 #include <glm/glm.hpp>
 #include <cmath>
 #include <mutex>
+#include <cstring>
 
 using namespace glm;
 
@@ -101,7 +102,10 @@ vec3 Extractor::computeDensity(ivec3 stu, float anglethreshold)
 
 void Extractor::extract(std::vector<float>& points, float threshold)
 {
+    float* densitymap = new float[w*w*w];
+    memset(densitymap, 0, sizeof(float)*w*w*w);
     std::mutex vectormutex;
+
 #pragma omp parallel for
     for (int i = 1; i < w-1; i++) {
         for (int j = 1; j < w-1; j++) {
@@ -110,16 +114,30 @@ void Extractor::extract(std::vector<float>& points, float threshold)
                 vec3 d = computeDensity(ivec3(i,j,k), threshold);
                 float f = neighbors.size()/2 - d.y;
                 if (f > 8) {
-                    std::lock_guard<std::mutex> lock(vectormutex);
-                    points.push_back((k+0.5)/(float)w);
-                    points.push_back((j+0.5)/(float)w);
-                    points.push_back((i+0.5)/(float)w);
-                    points.push_back(d.x);
+                    densitymap[w*w*i + w*j + k] = d.x;
+                } else {
+                    densitymap[w*w*i + w*j + k] = -1;
                 }
             }
         }
     }
-
+#pragma omp parallel for
+    for (int i = 1; i < w-1; i++) {
+        for (int j = 1; j < w-1; j++) {
+            for (int k = 1; k < w-1; k++) {
+                int idx = i*w*w+j*w+k;
+                if (densitymap[idx] >= 0) {
+                    std::lock_guard<std::mutex> lock(vectormutex);
+                    points.push_back((k+0.5)/(float)w);
+                    points.push_back((j+0.5)/(float)w);
+                    points.push_back((i+0.5)/(float)w);
+                    points.push_back(densitymap[idx]);
+                    points.push_back(densitymap[idx]);
+                    points.push_back(densitymap[idx]);
+                }
+            }
+        }
+    }
 }
 
 void Extractor::initNeighbors() {
