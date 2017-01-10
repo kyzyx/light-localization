@@ -466,6 +466,8 @@ void keydown(unsigned char key, int x, int y) {
         s.deleteLight(selectedlight);
         rerasterizeLights();
         dragging = 0;
+    } else if (key == 27) {
+        exit(0);
     }
 }
 
