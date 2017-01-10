@@ -100,6 +100,18 @@ vec3 Extractor::computeDensity(ivec3 stu, float anglethreshold)
     return vec3(numsmallangles?smallangles/numsmallangles:0, numsmallangles, numlargeangles?largeangles/numlargeangles:0);
 }
 
+bool isLocalMax(int x, int y, int z, float* f, int w) {
+    int idx = w*w*x + w*y + z;
+    for (int i = -2; i <= 2; i++) {
+        for (int j = -2; j <= 2; j++) {
+            for (int k = -2; k <= 2; k++) {
+                if (i == 0 && j == 0 && k == 0) continue;
+                if (f[w*w*(x+i)+w*(y+j)+z+k] > f[idx]) return false;
+            }
+        }
+    }
+    return true;
+}
 void Extractor::extract(std::vector<float>& points, float threshold)
 {
     float* densitymap = new float[w*w*w];
@@ -132,8 +144,12 @@ void Extractor::extract(std::vector<float>& points, float threshold)
                     points.push_back((j+0.5)/(float)w);
                     points.push_back((i+0.5)/(float)w);
                     points.push_back(densitymap[idx]);
-                    points.push_back(densitymap[idx]);
-                    points.push_back(densitymap[idx]);
+                    points.push_back(0);
+                    if (densitymap[idx] > 0 && isLocalMax(i,j,k,densitymap,w)) {
+                        points.push_back(densitymap[idx]);
+                    } else {
+                        points.push_back(0);
+                    }
                 }
             }
         }
