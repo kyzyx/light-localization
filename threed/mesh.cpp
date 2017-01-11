@@ -20,29 +20,42 @@ void readPly(const char* filename,
         std::vector<float>& verts,
         std::vector<float>& norms,
         std::vector<unsigned int>& faces,
+        std::vector<float>& colors,
         std::vector<float>& lights
         )
 {
     ifstream in(filename);
     int nfaces, nvertices;
     int nlights = 0;
+    bool hasnormals = true;
+    bool hascolors = false;
     // Parse Header
     string line;
     string s;
     getline(in, line);
     if (line == "ply") {
         getline(in, line);
+        string element;
         while (line != "end_header") {
             stringstream sin(line);
             sin >> s;
             if (s == "element") {
                 sin >> s;
                 if (s == "vertex") {
+                    element = "vertex";
                     sin >> nvertices;
                 } else if (s == "face") {
+                    element = "face";
                     sin >> nfaces;
                 } else if (s == "light") {
+                    element = "light";
                     sin >> nlights;
+                }
+            } else if (s == "property" && element == "vertex") {
+                sin >> s; // Data type
+                sin >> s; // name
+                if (s == "red") {
+                    hascolors = true;
                 }
             }
             getline(in, line);
@@ -56,10 +69,18 @@ void readPly(const char* filename,
         verts.push_back(x);
         verts.push_back(y);
         verts.push_back(z);
-        in >> x >> y >> z;
-        norms.push_back(x);
-        norms.push_back(y);
-        norms.push_back(z);
+        if (hasnormals) {
+            in >> x >> y >> z;
+            norms.push_back(x);
+            norms.push_back(y);
+            norms.push_back(z);
+        }
+        if (hascolors) {
+            in >> x >> y >> z;
+            colors.push_back(x);
+            colors.push_back(y);
+            colors.push_back(z);
+        }
     }
     for (int i = 0; i < nfaces; i++) {
         float a, b, c, d;
@@ -127,14 +148,14 @@ void initAO(GLuint* vao,
 }
 
 void LitMesh::ReadFromPly(const char* filename) {
-    readPly(filename, v, n, f, l);
-    computeLighting();
+    readPly(filename, v, n, f, c, l);
+    if (c.empty()) computeLighting();
     initShaders();
     initAO(&meshao, v.size()/3, v.data(), n.data(), f.size(), f.data(), c.data());
 
-    vector<float> sv, sn, sl;
+    vector<float> sv, sn, sl, sc;
     vector<unsigned int> sf;
-    readPly("sphere.ply", sv, sn, sf, sl);
+    readPly("sphere.ply", sv, sn, sf, sc, sl);
     initAO(&sphereao, sv.size()/3, sv.data(), sn.data(), sf.size(), sf.data());
     numspherefaces = sf.size();
 }
@@ -143,9 +164,10 @@ void LitMesh::cudaInit(int dim) {
     cm->w = dim;
     cm->n = v.size()/3;
     Cudamap_init(cm, v.data(), n.data());
-    for (int i = 0; i < l.size(); i += 4) {
-        Cudamap_addLight(cm, l[i+3], l[i], l[i+1], l[i+2]);
-    }
+    Cudamap_setIntensities(cm, c.data());
+    //for (int i = 0; i < l.size(); i += 4) {
+        //Cudamap_addLight(cm, l[i+3], l[i], l[i+1], l[i+2]);
+    //}
 }
 
 void LitMesh::initShaders() {
