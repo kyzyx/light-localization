@@ -35,6 +35,7 @@ class LitMesh {
     private:
         void initShaders();
         void computeLighting();
+        void normalize();
 
         Cudamap* cm;
         std::vector<float> v;

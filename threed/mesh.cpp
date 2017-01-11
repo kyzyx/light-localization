@@ -147,8 +147,33 @@ void initAO(GLuint* vao,
     glBindVertexArray(0);
 }
 
+void LitMesh::normalize() {
+    float lo[3];
+    float hi[3];
+    float scale[3];
+    for (int i = 0; i < 3; i++) {
+        lo[i] = 1e9;
+        hi[i] = -1e9;
+    }
+    for (int i = 0; i < v.size(); i+=3) {
+        for (int j = 0; j < 3; j++) {
+            lo[j] = min(lo[j], v[i+j]);
+            hi[j] = max(hi[j], v[i+j]);
+        }
+    }
+    for (int i = 0; i < 3; i++) {
+        scale[i] = hi[i] - lo[i];
+    }
+    for (int i = 0; i < v.size(); i+=3) {
+        for (int j = 0; j < 3; j++) {
+            v[i+j] = (v[i+j]-lo[j])/scale[j];
+        }
+    }
+}
+
 void LitMesh::ReadFromPly(const char* filename) {
     readPly(filename, v, n, f, c, l);
+    normalize();
     if (c.empty()) computeLighting();
     initShaders();
     initAO(&meshao, v.size()/3, v.data(), n.data(), f.size(), f.data(), c.data());
