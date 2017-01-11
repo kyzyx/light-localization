@@ -45,6 +45,7 @@ bool shouldWritePlyFile = false;
 string pngFilename, plyFilename, exrFilename;
 
 bool renderlights = true;
+bool renderpoints = true;
 
 void keydown(unsigned char key, int x, int y) {
     if (key == ',') {
@@ -73,6 +74,8 @@ void keydown(unsigned char key, int x, int y) {
         planemanager->togglePlane();
     } else if (key == 'l') {
         renderlights = !renderlights;
+    } else if (key == 'k') {
+        renderpoints = !renderpoints;
     } else if (key == 'h') {
         // cout << helpstring << endl;
     }
@@ -146,7 +149,7 @@ void draw3D() {
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, rfr_tex);
     mesh->Render();
-    mesh->RenderPointcloud();
+    if (renderpoints) mesh->RenderPointcloud();
     if (renderlights) mesh->RenderLights();
     renderPlane(progs[currprog][1]);
     glPopMatrix();
