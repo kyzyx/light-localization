@@ -150,7 +150,7 @@ void initAO(GLuint* vao,
 void LitMesh::normalize() {
     float lo[3];
     float hi[3];
-    float scale[3];
+    float scale = 0;
     for (int i = 0; i < 3; i++) {
         lo[i] = 1e9;
         hi[i] = -1e9;
@@ -162,11 +162,16 @@ void LitMesh::normalize() {
         }
     }
     for (int i = 0; i < 3; i++) {
-        scale[i] = hi[i] - lo[i];
+        scale = max(scale, hi[i] - lo[i]);
     }
     for (int i = 0; i < v.size(); i+=3) {
         for (int j = 0; j < 3; j++) {
-            v[i+j] = (v[i+j]-lo[j])/scale[j];
+            v[i+j] = (v[i+j]-lo[j])/scale;
+        }
+    }
+    for (int i = 0; i < l.size(); i+=4) {
+        for (int j = 0; j < 3; j++) {
+            l[i+j] = (l[i+j]-lo[j])/scale;
         }
     }
 }
