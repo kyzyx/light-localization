@@ -194,7 +194,11 @@ void LitMesh::cudaInit(int dim) {
     cm->w = dim;
     cm->n = v.size()/3;
     Cudamap_init(cm, v.data(), n.data());
-    Cudamap_setIntensities(cm, c.data());
+    vector<float> tmp;
+    for (int i = 0; i < c.size(); i+=3) {
+        tmp.push_back(c[i]);
+    }
+    Cudamap_setIntensities(cm, tmp.data());
     //for (int i = 0; i < l.size(); i += 4) {
         //Cudamap_addLight(cm, l[i+3], l[i], l[i+1], l[i+2]);
     //}
