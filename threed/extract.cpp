@@ -134,9 +134,9 @@ void Extractor::extract(std::vector<float>& points, float threshold)
         }
     }
 #pragma omp parallel for
-    for (int i = 1; i < w-1; i++) {
-        for (int j = 1; j < w-1; j++) {
-            for (int k = 1; k < w-1; k++) {
+    for (int i = 2; i < w-2; i++) {
+        for (int j = 2; j < w-2; j++) {
+            for (int k = 2; k < w-2; k++) {
                 int idx = i*w*w+j*w+k;
                 if (densitymap[idx] >= 0) {
                     std::lock_guard<std::mutex> lock(vectormutex);
