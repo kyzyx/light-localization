@@ -46,6 +46,7 @@ string pngFilename, plyFilename, exrFilename;
 
 bool renderlights = true;
 bool renderpoints = true;
+bool renderplane = true;
 
 void keydown(unsigned char key, int x, int y) {
     if (key == ',') {
@@ -76,6 +77,8 @@ void keydown(unsigned char key, int x, int y) {
         renderlights = !renderlights;
     } else if (key == 'k') {
         renderpoints = !renderpoints;
+    } else if (key == 'j') {
+        renderplane = !renderplane;
     } else if (key == 'h') {
         // cout << helpstring << endl;
     }
@@ -151,7 +154,7 @@ void draw3D() {
     mesh->Render();
     if (renderpoints) mesh->RenderPointcloud();
     if (renderlights) mesh->RenderLights();
-    renderPlane(progs[currprog][1]);
+    if (renderplane) renderPlane(progs[currprog][1]);
     glPopMatrix();
 }
 
