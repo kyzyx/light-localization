@@ -410,6 +410,7 @@ void selectLight(int i) {
 }
 
 bool shouldExitImmediately = false;
+bool shouldPrintOnAxis = false;
 bool shouldWriteExrFile = false;
 bool shouldWritePngFile = false;
 bool shouldWritePlyFile = false;
@@ -508,6 +509,16 @@ void mousemove(int x, int y) {
     }
 }
 
+bool any(unsigned char* a, int w, int h, int x, int y, int d = 1) {
+    for (int r = max(0,y-d); r < h && r <= y+d; r++) {
+        for (int c = max(0,x-d); c < w && c <= x+d; c++) {
+            if (a[3*(w*r+c)]) return true;
+            //if (a[3*(w*(h-r-1)+c)]) return true;
+        }
+    }
+    return false;
+}
+
 void draw() {
     if (shouldWritePlyFile || shouldWriteExrFile) {
         s.computeField(distancefield);
@@ -567,6 +578,18 @@ void draw() {
         shouldWritePngFile = false;
     }
     if (shouldExitImmediately) {
+        if (shouldPrintOnAxis) {
+            int ww = width*displayscale;
+            int hh = height*displayscale;
+            glReadPixels(0,0,ww,hh, GL_RGB, GL_UNSIGNED_BYTE, (void*) imagedata);
+            int numOnMedialAxis = 0;
+            for (int i = 0; i < s.numLights(); i++) {
+                int xx, yy;
+                s.world2clip(s.getLight(i).head(2), xx, yy, ww, hh);
+                if (any(imagedata, ww, hh, xx, yy, 3)) numOnMedialAxis++;
+            }
+            cout << numOnMedialAxis/(float) s.numLights() << endl;
+        }
         exit(0);
     }
     glutSwapBuffers();
@@ -765,6 +788,10 @@ int main(int argc, char** argv) {
 
     if (options[EXIT_IMMEDIATELY]) {
         shouldExitImmediately = true;
+    }
+    if (options[PRINT_ONAXIS]) {
+        shouldPrintOnAxis = true;
+        currprog = PROG_MEDIALAXIS;
     }
     if (options[OUTPUT_IMAGEFILE]) {
         string s = options[OUTPUT_IMAGEFILE].arg;

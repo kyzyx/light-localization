@@ -11,6 +11,7 @@ enum optionIndex {
     EXIT_IMMEDIATELY,
     OUTPUT_IMAGEFILE,
     OUTPUT_MESHFILE,
+    PRINT_ONAXIS,
     //NOISE_NORMAL,
     //NOISE_GEO,
     //NOISE_INTENSITY,
@@ -40,8 +41,9 @@ const option::Descriptor usage[] =
     {DISPLAYSCALE,     0, "s", "scale",      integer,          "  -s, --scale displayscale\tShow images at scale*res resolution"},
     {MODE,             0, "m", "mode",       integer,          "  -m, --mode modeindex\tVisualization mode (0: distance field, 1: sourcemap, 2: voronoi, 3: medial axis, 4: density)"},
     {EXIT_IMMEDIATELY, 0, "q", "",          option::Arg::None, "  -q                             \tExit immediately after output"},
-    {OUTPUT_IMAGEFILE, 0, "o", "imagefile", filename,          "  -o img.ppm, --imagefile img.ppm\t"},
-    {OUTPUT_MESHFILE,  0, "",  "meshfile",  filename,          "  --meshfile mesh.ply            \t"},
+    {OUTPUT_IMAGEFILE, 0, "o", "imagefile", filename,               "  -o img.ppm, --imagefile img.ppm\t"},
+    {OUTPUT_MESHFILE,  0, "",  "meshfile",  filename,               "  --meshfile mesh.ply            \t"},
+    {PRINT_ONAXIS,     0, "",  "print-onaxis",   option::Arg::None, "  --print-onaxis                 \t"},
     {0,0,0,0,0,0}
 };
 #endif
