@@ -1,7 +1,7 @@
 from random import uniform
 
 nlights = [2,3,4,5]
-sep = 0.05
+sep = 0.1
 ncases = 100
 filename = "box%03d.lt"
 
@@ -19,13 +19,13 @@ def genlights(n):
     lights = []
     valid = False
     while not valid:
-        lights = [(uniform(-1,1), uniform(-1,1), uniform(1,10)) for i in range(n)]
+        lights = [(uniform(-0.9,0.9), uniform(-0.9,0.9), uniform(1,5)) for i in range(n)]
         valid = True
         for i in range(len(lights)):
             for j in range(i+1,len(lights)):
                 if dist2(lights[i], lights[j]) < sep*sep:
                     valid = False
-        return ["%f %f %f"%l for l in lights]
+    return ["%f %f %f"%l for l in lights]
 
 
 for n in nlights:
