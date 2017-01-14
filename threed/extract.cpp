@@ -83,21 +83,29 @@ vec3 Extractor::computeDensity(ivec3 stu, float anglethreshold)
     dirs.push_back(getNorm(df, w, stu+ivec3(1,1,-1)));
     dirs.push_back(getNorm(df, w, stu+ivec3(1,1,0)));
     dirs.push_back(getNorm(df, w, stu+ivec3(1,1,1)));
+
     float smallangles = 0;
+    float medangles = 0;
     float largeangles = 0;
+    float margin = 0.07;
     int numsmallangles = 0;
+    int nummedangles = 0;
     int numlargeangles = 0;
+
     for (int i = 0; i < neighbors.size(); i+=2) {
         float a = angle(dirs[neighbors[i]], dirs[neighbors[i+1]]);
-        if (a > anglethreshold) {
+        if (a > anglethreshold + margin) {
             largeangles += a;
             numlargeangles++;
+        } else if (a > anglethreshold) {
+            medangles += a;
+            nummedangles++;
         } else {
             smallangles += a;
             numsmallangles++;
         }
     }
-    return vec3(numsmallangles?smallangles/numsmallangles:0, numsmallangles, numlargeangles?largeangles/numlargeangles:0);
+    return vec3(numsmallangles?smallangles/numsmallangles:0, numsmallangles, nummedangles);
 }
 
 bool isLocalMax(int x, int y, int z, float* f, int w) {
@@ -123,10 +131,16 @@ void Extractor::extract(std::vector<float>& points, float threshold)
         for (int j = 1; j < w-1; j++) {
             for (int k = 1; k < w-1; k++) {
                 //float f = medialaxis(df, w, ivec3(i,j,k));
+                float r = sqrt(i*i + j*j + k*k)/w;
                 vec3 d = computeDensity(ivec3(i,j,k), threshold);
-                float f = neighbors.size()/2 - d.y;
-                if (f > 8) {
-                    densitymap[w*w*i + w*j + k] = d.x;
+                float f = neighbors.size()/2 - d.y - d.z; // numlargeangles
+                float fp = neighbors.size()/2 - d.y; // large or medium angles
+                if (fp > 2) {
+                    if (f > 2) {
+                        densitymap[w*w*i + w*j + k] = d.x;
+                    } else {
+                        densitymap[w*w*i + w*j + k] = 0;
+                    }
                 } else {
                     densitymap[w*w*i + w*j + k] = -1;
                 }
