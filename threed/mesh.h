@@ -23,6 +23,8 @@ class LitMesh {
         };
         void updatePointcloud();
 
+        int getResolution() const { return resolution; }
+        void setResolution(int r) { resolution = r; }
         float getExposure() const { return exposure; }
         float setExposure(float e) { exposure = e; }
         int NLights() const { return l.size()/4; }
@@ -44,6 +46,7 @@ class LitMesh {
         std::vector<unsigned int> f;
         std::vector<float> l;
 
+        int resolution;
         float exposure;
 
         GLuint pcao;

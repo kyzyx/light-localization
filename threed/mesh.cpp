@@ -9,7 +9,7 @@
 using namespace std;
 
 LitMesh::LitMesh(Cudamap* cudamap)
-    : cm(cudamap), exposure(0.5)
+    : cm(cudamap), exposure(0.5), resolution(800)
 {
 }
 
@@ -307,8 +307,8 @@ void LitMesh::RenderPointcloud(float pointsize) {
     glUniformMatrix4fv(pointprojectionmatrixuniform, 1, GL_FALSE, projection);
     glUniformMatrix4fv(pointmvmatrixuniform, 1, GL_FALSE, modelview);
     glUniform1f(pointexpuniform, exposure);
-    glUniform1i(pointdimuniform, 600);
-    glUniform1f(pointfocuniform, 600/(2*tan(M_PI/8)));
+    glUniform1i(pointdimuniform, resolution);
+    glUniform1f(pointfocuniform, resolution/(2*tan(M_PI/8)));
 
     glEnable(GL_DEPTH_TEST);
     glDisable(GL_LIGHTING);

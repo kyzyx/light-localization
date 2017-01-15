@@ -12,10 +12,10 @@
 #include "mesh.h"
 #include "trackball.h"
 
-int width = 600;
-int height = 600;
-int width3d = 600;
-int height3d = 600;
+int width = 800;
+int height = 800;
+int width3d = 800;
+int height3d = 800;
 unsigned char* imagedata;
 float* distancefield;
 
@@ -314,6 +314,7 @@ int main(int argc, char** argv) {
     int dim = 512;
     if (options[INPUT_SCENEFILE]) {
         mesh = new LitMesh(&cudamap);
+        mesh->setResolution(width3d);
         mesh->ReadFromPly(options[INPUT_SCENEFILE].arg);
     } else {
         option::printUsage(cout, usage);
