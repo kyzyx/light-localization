@@ -306,6 +306,7 @@ enum {
     PROG_GRAD = 5,
     PROG_LAPLACIAN = 6,
     PROG_LOCALMIN = 10,
+    PROG_LOCALMAX = 11,
 };
 GLuint progs[NUM_PROGS];
 float exposure;
@@ -410,7 +411,7 @@ void selectLight(int i) {
 }
 
 bool shouldExitImmediately = false;
-bool shouldPrintOnAxis = false;
+bool shouldPrintSuccess = false;
 bool shouldWriteExrFile = false;
 bool shouldWritePngFile = false;
 bool shouldWritePlyFile = false;
@@ -519,6 +520,37 @@ bool any(unsigned char* a, int w, int h, int x, int y, int d = 1) {
     return false;
 }
 
+void GaussianBlur(float* a, float* b, int w, int h, int r) {
+    float* G = new float[r+1];
+    float tot = 0;
+    for (int i = 0; i < r+1; i++) {
+        float sigma = r/3.f;
+        G[i] = exp(-i*i/(2*r*r));
+        tot += G[i];
+    }
+    for (int i = 0; i < r+1; i++) G[i] /= tot;
+    float* c = new float[3*w*h];
+    memset(c, 0, sizeof(float)*3*w*h);
+    // Horizontal
+    for (int i = r; i < h-r; i++) {
+        for (int j = r; j < w-r; j++) {
+            for (int k = -r; k <= r; k++) {
+                for (int ch = 0; ch < 3; ch++) c[3*(i*w+j)+ch] += G[abs(k)]*a[3*(i*w+j+k)+ch];
+            }
+        }
+    }
+    // Vertical
+    for (int i = r; i < h-r; i++) {
+        for (int j = r; j < w-r; j++) {
+            for (int k = -r; k <= r; k++) {
+                for (int ch = 0; ch < 3; ch++) b[3*(i*w+j)+ch] += G[abs(k)]*c[3*((i+k)*w+j)+ch];
+            }
+        }
+    }
+    delete [] c;
+    delete [] G;
+}
+
 void draw() {
     if (shouldWritePlyFile || shouldWriteExrFile) {
         s.computeField(distancefield);
@@ -546,9 +578,13 @@ void draw() {
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     }
-    if (currprog == PROG_LOCALMIN || currprog == PROG_LAPLACIAN) {
+    if (currprog == PROG_LOCALMIN || currprog == PROG_LOCALMAX || currprog == PROG_LAPLACIAN) {
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glBindFramebuffer(GL_FRAMEBUFFER, rfr_fbo);
-        glUseProgram(progs[PROG_GRAD]);
+        glUseProgram(progs[PROG_DENSITY]);
+        glUniform1f(glGetUniformLocation(progs[PROG_DENSITY], "exposure"), 1);
+        glUniform1i(glGetUniformLocation(progs[PROG_DENSITY], "maxidx"), s.numSurfels());
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, 0);
         glDrawArrays(GL_TRIANGLES,0,6);
@@ -565,7 +601,8 @@ void draw() {
     }
     glUniform1f(glGetUniformLocation(progs[currprog], "exposure"), exposure);
     glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, auxtex);
+    if (shouldPrintSuccess) glBindTexture(GL_TEXTURE_2D, 0);
+    else glBindTexture(GL_TEXTURE_2D, auxtex);
     glDrawArrays(GL_TRIANGLES,0,6);
     //glBindTexture(GL_TEXTURE_BUFFER,0);
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -578,17 +615,100 @@ void draw() {
         shouldWritePngFile = false;
     }
     if (shouldExitImmediately) {
-        if (shouldPrintOnAxis) {
+        if (shouldPrintSuccess) {
             int ww = width*displayscale;
             int hh = height*displayscale;
+            unsigned char* medialaxis = new unsigned char[3*ww*hh];
+            float* filtered = new float[3*ww*hh];
+            float* copy = new float[3*ww*hh];
+            memset(filtered, 0, 3*ww*hh*sizeof(float));
+            memset(copy, 0, 3*ww*hh*sizeof(float));
+
+            // Read medial axis and density map
             glReadPixels(0,0,ww,hh, GL_RGB, GL_UNSIGNED_BYTE, (void*) imagedata);
+            currprog = PROG_MEDIALAXIS;
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            glUseProgram(progs[currprog]);
+            glBindVertexArray(vao);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, tex);
+            if (currprog == PROG_SOURCEMAP || currprog == PROG_VORONOI || currprog == PROG_MEDIALAXIS || currprog == PROG_DENSITY) {
+                glUniform1i(glGetUniformLocation(progs[currprog], "maxidx"), s.numSurfels());
+            }
+            glUniform1f(glGetUniformLocation(progs[currprog], "exposure"), exposure);
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            glDrawArrays(GL_TRIANGLES,0,6);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            glBindVertexArray(0);
+            glReadPixels(0,0,ww,hh, GL_RGB, GL_UNSIGNED_BYTE, (void*) medialaxis);
+
+            // Compute proportion lying on medial axis
             int numOnMedialAxis = 0;
+            cout << s.numLights() << endl;
             for (int i = 0; i < s.numLights(); i++) {
                 int xx, yy;
                 s.world2clip(s.getLight(i).head(2), xx, yy, ww, hh);
-                if (any(imagedata, ww, hh, xx, yy, 3)) numOnMedialAxis++;
+                cout << xx << " " << yy << " ";
+                if (any(medialaxis, ww, hh, xx, yy, 7)) {
+                    cout << 7;
+                    numOnMedialAxis++;
+                }
+                else if (any(medialaxis, ww, hh, xx, yy, 10)) {
+                    cout << 10;
+                } else {
+                    cout << 0;
+                }
+                cout << endl;
             }
             cout << numOnMedialAxis/(float) s.numLights() << endl;
+
+            // Compute filtered density on axis
+            for (int r = 0; r < hh; r++) {
+                for (int c = 0; c < ww; c++) {
+                    for (int ch = 0; ch < 3; ch++) {
+                        copy[3*(r*ww+c)+ch] = imagedata[3*(r*ww+c)+0];
+                    }
+                }
+            }
+            GaussianBlur(copy, filtered, ww, hh, 6);
+            int margin = 20;
+            for (int r = margin; r < hh-margin; r++) {
+                for (int c = margin; c < ww-margin; c++) {
+                    if (!medialaxis[3*(r*ww+c)]) {
+                        for (int ch = 0; ch < 3; ch++) {
+                            filtered[3*(r*ww+c)+ch] = 0;
+                        }
+                    }
+                }
+            }
+            int nmaxes = 0;
+            float lowthreshold = 100;
+            for (int r = margin; r < hh-margin; r++) {
+                for (int c = margin; c < ww-margin; c++) {
+                    float fv = filtered[3*(r*ww+c)];
+                    if (fv > lowthreshold) {
+                        bool islocalmax = true;
+                        for (int i = -14; i <= 14; i++) {
+                            for (int j = -14; j <= 14; j++) {
+                                if (i == 0 && j == 0) continue;
+                                if (filtered[3*((r+i)*ww+c+j)] >= fv) islocalmax = false;
+                            }
+                        }
+                        if (islocalmax) {
+                            cout << c << " " << r << " " << fv << endl;
+                            nmaxes++;
+                        }
+                    }
+                }
+            }
+            float precision = 0;
+            float recall = 0;
+            cout << precision << " ";
+            cout << recall << endl;
+            delete [] medialaxis;
         }
         exit(0);
     }
@@ -789,9 +909,9 @@ int main(int argc, char** argv) {
     if (options[EXIT_IMMEDIATELY]) {
         shouldExitImmediately = true;
     }
-    if (options[PRINT_ONAXIS]) {
-        shouldPrintOnAxis = true;
-        currprog = PROG_MEDIALAXIS;
+    if (options[PRINT_SUCCESS]) {
+        shouldPrintSuccess = true;
+        currprog = PROG_DENSITY;
     }
     if (options[OUTPUT_IMAGEFILE]) {
         string s = options[OUTPUT_IMAGEFILE].arg;

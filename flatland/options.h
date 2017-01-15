@@ -11,7 +11,7 @@ enum optionIndex {
     EXIT_IMMEDIATELY,
     OUTPUT_IMAGEFILE,
     OUTPUT_MESHFILE,
-    PRINT_ONAXIS,
+    PRINT_SUCCESS,
     //NOISE_NORMAL,
     //NOISE_GEO,
     //NOISE_INTENSITY,
@@ -43,7 +43,7 @@ const option::Descriptor usage[] =
     {EXIT_IMMEDIATELY, 0, "q", "",          option::Arg::None, "  -q                             \tExit immediately after output"},
     {OUTPUT_IMAGEFILE, 0, "o", "imagefile", filename,               "  -o img.ppm, --imagefile img.ppm\t"},
     {OUTPUT_MESHFILE,  0, "",  "meshfile",  filename,               "  --meshfile mesh.ply            \t"},
-    {PRINT_ONAXIS,     0, "",  "print-onaxis",   option::Arg::None, "  --print-onaxis                 \t"},
+    {PRINT_SUCCESS,    0, "",  "print-success",  option::Arg::None, "  --print-success                \t"},
     {0,0,0,0,0,0}
 };
 #endif
