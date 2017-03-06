@@ -359,12 +359,22 @@ void rerasterizeLights() {
         s.world2clip(p, ix, iy, width*displayscale, height*displayscale);
         float a = s.getLightAngle(i);
         if (selectedlight == i) {
-            rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 1.f);
+            if (s.getLight(i)[2] < 0) {
+                if (i == lastCandidate) rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.3f);
+                else rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.2f);
+            } else {
+                rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 1.f);
+            }
             if (a >= 0) {
                 rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix + RADIUS*cos(a), iy + RADIUS*sin(a), RADIUS/2, 1.f);
             }
         } else {
-            rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.4f);
+            if (s.getLight(i)[2] < 0) {
+                if (i == lastCandidate) rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.3f);
+                else rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.2f);
+            } else {
+                rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.4f);
+            }
             if (a >= 0) {
                 rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix + RADIUS*cos(a), iy + RADIUS*sin(a), RADIUS/2, 1.f);
             }
@@ -488,6 +498,7 @@ void click(int button, int state, int x, int y) {
         float r = p2[0] - p[0];
         bool clicked = false;
         for (int i = 0; i < s.numLights(); i++) {
+            if (s.getLight(i)[2] < 0) continue;
             if ((p-s.getLight(i).head(2)).squaredNorm() < r*r) {
                 selectLight(i);
                 clicked = true;

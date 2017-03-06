@@ -33,5 +33,7 @@ void main() {
     float v = medialaxis(st)*exposure;
     float a = texture(aux, st).x;
     vec4 w = a>0.5?vec4(a,0,0,0):vec4(0,0.5+a,0,0);
+    w = a>0.35?w:vec4(0,0,1-a,0);
+    w = a>0.25?w:vec4(0,1-a,1-a,0);
     color = a>0?w:vec4(v,v,v,1);
 };
