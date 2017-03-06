@@ -136,7 +136,7 @@ int f2c(float f) {
     return std::min(std::max(f*255,0.f),255.f);
 }
 
-void outputPLY(const char* filename, float* data, int width, int height, float* colors) {
+void outputPLY(const char* filename, float* data, int width, int height, int channels, float* colors) {
     static int filenum = 0;
     char* fmtfilename = new char[strlen(filename) + 4];
     sprintf(fmtfilename, filename, filenum++);
@@ -144,8 +144,8 @@ void outputPLY(const char* filename, float* data, int width, int height, float* 
     delete [] fmtfilename;
     float maxval = 0.01;
     for (int i = 0; i < width*height; i++) {
-        if (data[2*i] >= 1e9) data[2*i] = 0;
-        maxval = std::max(maxval, data[2*i]);
+        if (data[channels*i] >= 1e9) data[channels*i] = 0;
+        maxval = std::max(maxval, data[channels*i]);
     }
     maxval *= 2;
     out << "ply\nformat ascii 1.0\n";
@@ -156,7 +156,7 @@ void outputPLY(const char* filename, float* data, int width, int height, float* 
     out << "property list uchar int vertex_indices" << std::endl;
     out << "end_header" << std::endl;
     for (int i = 0; i < width*height; i++) {
-        out << (i%width) << " " << (i/width) << " " << width*data[2*i]/maxval;
+        out << (i%width) << " " << (i/width) << " " << width*data[channels*i]/maxval;
         //if (colors) out << f2c(colors[3*i]) << " " <<  f2c(colors[3*i+1]) << " " <<  f2c(colors[3*i+2]) << std::endl;
         if (colors) {
             if (colors[i] > 0) out << " " << (255-f2c(colors[i])) << " 0 0";

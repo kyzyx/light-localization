@@ -3,7 +3,7 @@
 
 bool outputEXR(const char* filename, const float* image, int width, int height, int channels=3);
 bool outputPNG(const char* filename, const unsigned char* image, int width, int height, int channels=3);
-void outputPLY(const char* filename, float* data, int width, int height, float* colors=0);
+void outputPLY(const char* filename, float* data, int width, int height, int channels=1, float* colors=0);
 
 bool readExrImage(const char* filename,
         float** image,

@@ -555,7 +555,7 @@ void draw() {
     if (shouldWritePlyFile || shouldWriteExrFile) {
         s.computeField(distancefield);
         if (shouldWritePlyFile) {
-            outputPLY(plyFilename.c_str(), distancefield, width, height, displayscale==1?auxlayer:NULL);
+            outputPLY(plyFilename.c_str(), distancefield, width, height, 2, displayscale==1?auxlayer:NULL);
             shouldWritePlyFile = false;
         }
         if (shouldWriteExrFile) {
