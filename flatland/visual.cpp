@@ -236,6 +236,27 @@ class Scene {
             falloffs.push_back(falloff);
             symmetries.push_back(0);
         }
+        float computeError() {
+            float total = 0;
+            float n = 0;
+            for (int i = 0; i < surfels.size(); i+=4) {
+                float lighting = 0;
+                float residual = 0;
+                for (int j = 0; j < lights.size(); j++) {
+                    // FIXME: non-point lights?
+                    Vector2f L = lights[j].head(2) - Vector2f(surfels[i], surfels[i+1]);
+                    float LdotL = L.squaredNorm();
+                    float ndotL = Vector2f(surfels[i+2], surfels[i+3]).dot(L);
+                    if (ndotL < 0) ndotL = 0;
+                    float l = LdotL>0?ndotL*lights[j][2]/(LdotL*sqrt(LdotL)):0;
+                    residual += l;
+                    if (lights[j][2] > 0) lighting += l;
+                }
+                total += lighting>0?abs(residual/lighting):0;
+                n+=1;
+            }
+            return n>0?total/n:0;
+        }
 
         // --------- Coordinate System Utilities ---------
         Vector2f clip2world(int x, int y, int w, int h) {
@@ -719,7 +740,7 @@ void draw() {
         GaussianBlur(imagecopy, filtered, ww, hh, 6);
 
         stepping = updateEstimates();
-        cout << lastCandidate << " " << -s.getLight(lastCandidate)[2] << endl;
+        cout << lastCandidate << " " << -s.getLight(lastCandidate)[2] << " " << s.computeError() << endl;
         rerasterizeLights();
         currprog = PROG_DENSITY;
     }
