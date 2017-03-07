@@ -450,6 +450,8 @@ bool shouldWriteExrFile = false;
 bool shouldWritePngFile = false;
 bool shouldWritePlyFile = false;
 bool stepping = false;
+bool recomputing = false;
+float originalval = 0.f;
 vector<int> candidateLights;
 string pngFilename, plyFilename, exrFilename;
 
@@ -621,12 +623,31 @@ bool updateEstimates() {
             currCandidate = candidateLights[i];
         }
     }
-    if (currCandidate < 0) {
-        currCandidate = s.numLights();
-        candidateLights.push_back(s.numLights());
-        s.addLight(p[0], p[1], decr);
+    if (recomputing) {
+        if (currCandidate != lastCandidate) {
+            cout << "Error: unexpected unequal!" << endl;
+        }
+        cout << "Moved light from " << s.getLight(currCandidate)[0] << "," << s.getLight(currCandidate)[1];
+        cout << " to " << p[0] << "," << p[1] << endl;
+        s.moveLight(p[0], p[1], currCandidate);
+        recomputing = false;
+        s.changeIntensity(currCandidate, originalval);
+        return false;
     } else {
-        s.changeIntensity(currCandidate, s.getLight(currCandidate)[2] + decr);
+        if (currCandidate < 0) {
+            currCandidate = s.numLights();
+            candidateLights.push_back(s.numLights());
+            s.addLight(p[0], p[1], decr);
+        } else {
+            if (lastCandidate == currCandidate) {
+                s.changeIntensity(currCandidate, s.getLight(currCandidate)[2] + decr);
+            } else {
+                // Remove current candidate negative light
+                recomputing = true;
+                originalval = s.getLight(currCandidate)[2];
+                s.changeIntensity(currCandidate, -1e-9);
+            }
+        }
     }
     if (lastCandidate == currCandidate) {
         return true;
