@@ -260,11 +260,59 @@ __global__ void cuCompute(
     }
 }
 
+const int NUM_ADJ = 9;
+__constant__ int adjx[NUM_ADJ] = { -1,-1,-1,0,1,1,1,0,-1 };
+__constant__ int adjy[NUM_ADJ] = { -1,0,1,1,1,0,-1,-1,-1 };
+#define LOADDATA(a,x,y,w,h) (((x)<(w))&&((y)<(h)))?a[(y)*w+(x)]:make_float2(0,0)
+
+__global__ void cuComputeDensity(
+        float2* field,
+        float* density,
+        int n, int w, int h,
+        float threshold
+)
+{
+    __shared__ float2 data[32][32];
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+    int x = threadIdx.x + blockDim.x*blockIdx.x;
+    int y = threadIdx.y + blockDim.y*blockIdx.y;
+
+    // Load data
+    data[ty][tx]       = LOADDATA(field,x,y,w,h);
+    data[ty+16][tx]    = LOADDATA(field,x,y+16,w,h);
+    data[ty][tx+16]    = LOADDATA(field,x+16,y,w,h);
+    data[ty+16][tx+16] = LOADDATA(field,x+16,y+16,w,h);
+    __syncthreads();
+
+    x += 8;
+    y += 8;
+    if (x < w-1 && y < h-1) {
+        tx += 8;
+        ty += 8;
+        float ret = 0;
+        int count = 0;
+        int prev = __float_as_int(data[ty+adjy[0]][tx+adjx[0]].y);
+        for (int i = 1; i < NUM_ADJ; i++) {
+            int curr = __float_as_int(data[ty+adjy[i]][tx+adjx[i]].y);
+            int d = abs(prev-curr);
+            d = d>n/2?n-d:d;
+            if (d < threshold) {
+                ret += d;
+                count += 1;
+            }
+            prev = curr;
+        }
+        density[w*y+x] = count>0?0.5*ret/count:0;
+    }
+}
+
 void Cudamap_init(Cudamap* cudamap, float* surfels, float* line_occluders, float* circle_occluders) {
     cudaSetDevice(0);
     cudaMalloc((void**) &(cudamap->d_intensities), sizeof(float)*cudamap->n);
     cudaMalloc((void**) &(cudamap->d_surfels), sizeof(float4)*cudamap->n);
     cudaMalloc((void**) &(cudamap->d_field), sizeof(float2)*cudamap->w*cudamap->h);
+    cudaMalloc((void**) &(cudamap->d_density), sizeof(float)*cudamap->w*cudamap->h);
     cudaMalloc((void**) &(cudamap->d_line_occluders), sizeof(float4)*cudamap->nlines);
     cudaMalloc((void**) &(cudamap->d_circle_occluders), sizeof(float4)*cudamap->ncircles);
 
@@ -331,7 +379,7 @@ void Cudamap_addDirectionalLight(Cudamap* cudamap, float intensity, float x, flo
             intensity, x, y, fx/d, fy/d, d, cudamap->n);
 }
 
-void Cudamap_compute(Cudamap* cudamap, float* field)
+void Cudamap_computeField(Cudamap* cudamap, float* field)
 {
     static int running = 0;
     int n = cudamap->n;
@@ -368,4 +416,22 @@ void Cudamap_compute(Cudamap* cudamap, float* field)
     cudaMemcpy(field, cudamap->d_field, sizeof(float2)*w*h, cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize();
     running = 0;
+}
+
+void Cudamap_computeDensity(Cudamap* cudamap, float* density, float threshold)
+{
+    int n = cudamap->n;
+    int w = cudamap->w;
+    int h = cudamap->h;
+    cudaMemset(cudamap->d_density, 0, sizeof(float)*w*h);
+
+    dim3 threads(16, 16, 1);
+    dim3 blocks((w+15)/16-1, (h+15)/16-1, 1);
+
+    cuComputeDensity<<< blocks, threads >>>(
+        cudamap->d_field, cudamap->d_density, n, w, h, threshold
+    );
+
+    cudaMemcpy(density, cudamap->d_density, sizeof(float)*w*h, cudaMemcpyDeviceToHost);
+    cudaDeviceSynchronize();
 }

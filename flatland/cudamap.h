@@ -10,6 +10,7 @@ typedef struct {
     float4* d_line_occluders;
     float4* d_circle_occluders;
     float2* d_field;
+    float* d_density;
     cudaArray* d_field_tex;
 
     // Occluder counts
@@ -28,5 +29,6 @@ extern "C" void Cudamap_free(Cudamap* cudamap);
 extern "C" void Cudamap_setIntensities(Cudamap* cudamap, float* intensities);
 extern "C" void Cudamap_addLight(Cudamap* cudamap, float intensity, float x, float y);
 extern "C" void Cudamap_addDirectionalLight(Cudamap* cudamap, float intensity, float x, float y, float fx, float fy);
-extern "C" void Cudamap_compute(Cudamap* cudamap, float* field);
+extern "C" void Cudamap_computeField(Cudamap* cudamap, float* field);
+extern "C" void Cudamap_computeDensity(Cudamap* cudamap, float* density, float threshold=10);
 #endif

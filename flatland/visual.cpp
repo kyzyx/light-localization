@@ -125,7 +125,10 @@ class Scene {
             Cudamap_setGLBuffer(&cm, pbo);
         }
         void computeField(float* distancefield=NULL) {
-            Cudamap_compute(&cm, distancefield?distancefield:field);
+            Cudamap_computeField(&cm, distancefield?distancefield:field);
+        }
+        void computeDensity(float* density=NULL) {
+            Cudamap_computeDensity(&cm, density?density:field);
         }
 
         // --------- Light Manipulation ---------
@@ -724,46 +727,16 @@ void draw() {
         exit(0);
     }
     if (stepping) {
-        int ww = width*displayscale;
-        int hh = height*displayscale;
+        int ww = width;
+        int hh = height;
         memset(filtered, 0, 3*ww*hh*sizeof(float));
         memset(imagecopy, 0, 3*ww*hh*sizeof(float));
 
-        // Read medial axis and density map
-        glReadPixels(0,0,ww,hh, GL_RGB, GL_UNSIGNED_BYTE, (void*) imagedata);
-        currprog = PROG_MEDIALAXIS;
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glUseProgram(progs[currprog]);
-        glBindVertexArray(vao);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, tex);
-        if (currprog == PROG_SOURCEMAP || currprog == PROG_VORONOI || currprog == PROG_MEDIALAXIS || currprog == PROG_DENSITY) {
-            glUniform1i(glGetUniformLocation(progs[currprog], "maxidx"), s.numSurfels());
-        }
-        glUniform1f(glGetUniformLocation(progs[currprog], "exposure"), exposure);
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, 0);
-        glDrawArrays(GL_TRIANGLES,0,6);
-        glBindTexture(GL_TEXTURE_2D, 0);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, 0);
-        glBindVertexArray(0);
-        glReadPixels(0,0,ww,hh, GL_RGB, GL_UNSIGNED_BYTE, (void*) medialaxis);
 
-        // Compute filtered density on axis
-        for (int r = 0; r < hh; r++) {
-            for (int c = 0; c < ww; c++) {
-                for (int ch = 0; ch < 3; ch++) {
-                    imagecopy[3*(r*ww+c)+ch] = imagedata[3*(r*ww+c)+0];
-                }
-            }
-        }
-        GaussianBlur(imagecopy, filtered, ww, hh, 6);
-
-        stepping = updateEstimates();
-        cout << lastCandidate << " " << -s.getLight(lastCandidate)[2] << " " << s.computeError() << endl;
+        s.computeDensity(imagecopy);
+        stepping = false; //updateEstimates();
+        cout << s.computeError() << endl;
         rerasterizeLights();
-        currprog = PROG_DENSITY;
     }
     glutSwapBuffers();
 }
