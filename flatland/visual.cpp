@@ -9,6 +9,8 @@
 #include "options.h"
 #include "fileio.h"
 
+const int EPSILON = 1e-9;
+
 int displayscale = 4;
 int width = 200;
 int height = 200;
@@ -274,6 +276,10 @@ class Scene {
             x = d[0]/v[0]*(w-2) + 1;
             y = d[1]/v[1]*(h-2) + 1;
         }
+        float sceneScale() const {
+            Vector2f v = maxp-minp;
+            return min(v[0], v[1]);
+        }
 
         void printScene() {
             cout << circles.size() + lines.size() << " " << lights.size() << endl;
@@ -453,8 +459,6 @@ bool shouldWriteExrFile = false;
 bool shouldWritePngFile = false;
 bool shouldWritePlyFile = false;
 bool stepping = false;
-bool recomputing = false;
-float originalval = 0.f;
 vector<int> candidateLights;
 string pngFilename, plyFilename, exrFilename;
 
@@ -506,8 +510,7 @@ void keydown(unsigned char key, int x, int y) {
     } else if (key == 'p') {
         s.printScene();
     } else if (key == 13) {
-        currprog = PROG_DENSITY;
-        stepping = true;
+        stepping = !stepping;
     } else if (key == 127 && selectedlight >= 0) {
         s.deleteLight(selectedlight);
         rerasterizeLights();
@@ -565,22 +568,23 @@ bool any(unsigned char* a, int w, int h, int x, int y, int d = 1) {
     return false;
 }
 
-void GaussianBlur(float* a, float* b, int w, int h, int r) {
+void GaussianBlur(float* a, float* b, int w, int h, int r, int nch=3) {
     float* G = new float[r+1];
     float tot = 0;
     for (int i = 0; i < r+1; i++) {
         float sigma = r/3.f;
         G[i] = exp(-i*i/(2*r*r));
-        tot += G[i];
+        tot += 2*G[i];
     }
+    tot -= 1;
     for (int i = 0; i < r+1; i++) G[i] /= tot;
-    float* c = new float[3*w*h];
-    memset(c, 0, sizeof(float)*3*w*h);
+    float* c = new float[nch*w*h];
+    memset(c, 0, sizeof(float)*nch*w*h);
     // Horizontal
     for (int i = r; i < h-r; i++) {
         for (int j = r; j < w-r; j++) {
             for (int k = -r; k <= r; k++) {
-                for (int ch = 0; ch < 3; ch++) c[3*(i*w+j)+ch] += G[abs(k)]*a[3*(i*w+j+k)+ch];
+                for (int ch = 0; ch < nch; ch++) c[nch*(i*w+j)+ch] += G[abs(k)]*a[nch*(i*w+j+k)+ch];
             }
         }
     }
@@ -588,7 +592,7 @@ void GaussianBlur(float* a, float* b, int w, int h, int r) {
     for (int i = r; i < h-r; i++) {
         for (int j = r; j < w-r; j++) {
             for (int k = -r; k <= r; k++) {
-                for (int ch = 0; ch < 3; ch++) b[3*(i*w+j)+ch] += G[abs(k)]*c[3*((i+k)*w+j)+ch];
+                for (int ch = 0; ch < nch; ch++) b[nch*(i*w+j)+ch] += G[abs(k)]*c[nch*((i+k)*w+j)+ch];
             }
         }
     }
@@ -596,68 +600,111 @@ void GaussianBlur(float* a, float* b, int w, int h, int r) {
     delete [] G;
 }
 
-bool updateEstimates() {
-    int ww = width*displayscale;
-    int hh = height*displayscale;
-    float decr = -0.05;
-    int bestr, bestc;
-    float bestv = 0;
-    int margin = 20;
+void recomputeMaxima(vector<Vector2f>& maxima) {
+    maxima.clear();
+    int ww = width;
+    int hh = height;
+
+    s.computeField();
+    s.computeDensity(imagecopy);
+    GaussianBlur(imagecopy, filtered, ww, hh, 5,1);
+
+    float lowthreshold = 0.5;
+    int nbrhd = 15;
+    int margin = 8;
     for (int r = margin; r < hh-margin; r++) {
         for (int c = margin; c < ww-margin; c++) {
-            float fv = filtered[3*(r*ww+c)];
-            float var = 0;
-            float w = 0;
-            if (fv > bestv) {
-                bestv = fv;
-                bestr = r;
-                bestc = c;
+            float fv = filtered[r*ww+c];
+            if (fv > lowthreshold) {
+                bool islocalmax = true;
+                for (int i = -nbrhd; i <= nbrhd; i++) {
+                    for (int j = -nbrhd; j <= nbrhd; j++) {
+                        if (i == 0 && j == 0) continue;
+                        float v = filtered[(r+i)*ww+c+j];
+                        if (v >= fv) {
+                            islocalmax = false;
+                            break;
+                        }
+                    }
+                    if (!islocalmax) break;
+                }
+                if (islocalmax) {
+                    maxima.push_back(s.clip2world(c,r,ww,hh));
+                }
             }
         }
     }
-    Vector2f p = s.clip2world(bestc, bestr, width*displayscale, height*displayscale);
-    int currCandidate = -1;
-    float distancethreshold = 0.04;
-    for (int i = 0; i < candidateLights.size(); i++) {
-        Vector2f p2 = s.getLight(candidateLights[i]).head(2);
-        float d = (p - p2).squaredNorm();
-        if (d < distancethreshold) {
-            distancethreshold = d;
-            currCandidate = candidateLights[i];
+}
+
+bool updateEstimates() {
+    double distancethreshold = 0.05*s.sceneScale();
+    double decrement = -0.03;
+    vector<Vector2f> maxima;
+    vector<int> candidate2maximum(candidateLights.size(), -1);
+
+    recomputeMaxima(maxima);
+
+    // Associate maxima with existing lights, adding new lights if necessary
+    for (int i = 0; i < maxima.size(); i++) {
+        float closest = distancethreshold;
+        int best = -1;
+        Vector2f& p = maxima[i];
+        for (int j = 0; j < candidateLights.size(); j++) {
+            Vector2f p2 = s.getLight(candidateLights[j]).head(2);
+            float d = (p - p2).norm();
+            if (d < closest) {
+                closest = d;
+                best = j;
+            }
         }
-    }
-    if (recomputing) {
-        if (currCandidate != lastCandidate) {
-            cout << "Error: unexpected unequal!" << endl;
-        }
-        cout << "Moved light from " << s.getLight(currCandidate)[0] << "," << s.getLight(currCandidate)[1];
-        cout << " to " << p[0] << "," << p[1] << endl;
-        s.moveLight(p[0], p[1], currCandidate);
-        recomputing = false;
-        s.changeIntensity(currCandidate, originalval);
-        return false;
-    } else {
-        if (currCandidate < 0) {
-            currCandidate = s.numLights();
-            candidateLights.push_back(s.numLights());
-            s.addLight(p[0], p[1], decr);
-        } else {
-            if (lastCandidate == currCandidate) {
-                s.changeIntensity(currCandidate, s.getLight(currCandidate)[2] + decr);
+        if (best >= 0) {
+            if (candidate2maximum[best] < 0) {
+                candidate2maximum[best] = i;
             } else {
-                // Remove current candidate negative light
-                recomputing = true;
-                originalval = s.getLight(currCandidate)[2];
-                s.changeIntensity(currCandidate, -1e-9);
+                cout << "Error: lights too close together!" << endl;
             }
+        } else {
+            candidateLights.push_back(s.numLights());
+            candidate2maximum.push_back(i);
+            s.addLight(p[0], p[1], -EPSILON);
         }
     }
-    if (lastCandidate == currCandidate) {
-        return true;
-    } else {
-        lastCandidate = currCandidate;
-        return false;
+
+    // Decrease intensity of all detected maxima
+    for (int i = 0; i < candidateLights.size(); i++) {
+        if (candidate2maximum[i] < 0) continue;
+        s.changeIntensity(candidateLights[i], s.getLight(candidateLights[i])[2] + decrement);
     }
+
+    // Update positions of all lights
+    vector<Vector2f> updatedPositions(candidateLights.size());
+    for (int i = 0; i < candidateLights.size(); i++) {
+        // Reset the predicted intensity for this light
+        // to compute better position with other light
+        // intensities decreased
+        float previousIntensity = s.getLight(candidateLights[i])[2];
+        s.changeIntensity(candidateLights[i], -EPSILON);
+
+        // Get updated position
+        recomputeMaxima(maxima);
+        float closest = distancethreshold;
+        int best = -1;
+        Vector2f p2 = s.getLight(candidateLights[i]).head(2);
+        for (int j = 0; j < maxima.size(); j++) {
+            float d = (maxima[j] - p2).squaredNorm();
+            if (d < closest) {
+                closest = d;
+                best = j;
+            }
+        }
+        if (best >= 0) {
+            s.moveLight(maxima[best][0], maxima[best][1], i);
+        }
+
+        // Reset intensities
+        s.changeIntensity(candidateLights[i], previousIntensity);
+    }
+    return true;
 }
 
 void draw() {
@@ -732,9 +779,7 @@ void draw() {
         memset(filtered, 0, 3*ww*hh*sizeof(float));
         memset(imagecopy, 0, 3*ww*hh*sizeof(float));
 
-
-        s.computeDensity(imagecopy);
-        stepping = false; //updateEstimates();
+        stepping = updateEstimates();
         cout << s.computeError() << endl;
         rerasterizeLights();
     }
