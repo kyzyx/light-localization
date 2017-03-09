@@ -15,6 +15,7 @@ int displayscale = 4;
 int width = 200;
 int height = 200;
 int lastCandidate = -1;
+float prevErr = 1e9;
 unsigned char* imagedata;
 unsigned char* medialaxis;
 float* imagecopy;
@@ -227,6 +228,18 @@ class Scene {
         int getSymmetries(int i) const {
             return symmetries[i];
         }
+        void saveLights() {
+            savedLights = lights;
+        }
+        void restoreLights() {
+            swap(lights, savedLights);
+            float* intensities = new float[cm.n];
+            memset(intensities, 0, sizeof(float)*cm.n);
+            Cudamap_setIntensities(&cm, intensities);
+            for (int i = 0; i < lights.size(); i++) {
+                Cudamap_addLight(&cm, lights[i][2], lights[i][0], lights[i][1]);
+            }
+        }
         void addLight(float x, float y, float intensity=1) {
             Cudamap_addLight(&cm, intensity, x, y);
             lights.push_back(Vector3f(x,y,intensity));
@@ -256,6 +269,9 @@ class Scene {
                     float l = LdotL>0?ndotL*lights[j][2]/(LdotL*sqrt(LdotL)):0;
                     residual += l;
                     if (lights[j][2] > 0) lighting += l;
+                }
+                if (residual < 0) {
+                    return -1;
                 }
                 total += lighting>0?abs(residual/lighting):0;
                 n+=1;
@@ -316,6 +332,7 @@ class Scene {
         int ncircles;
 
         vector<Vector3f> lights;
+        vector<Vector3f> savedLights;
         vector<float> directions;
         vector<float> falloffs;
         vector<int> symmetries;
@@ -773,8 +790,18 @@ void draw() {
         memset(filtered, 0, 3*ww*hh*sizeof(float));
         memset(imagecopy, 0, 3*ww*hh*sizeof(float));
 
+        s.saveLights();
         stepping = updateEstimates();
-        cout << s.computeError() << endl;
+        float err = s.computeError();
+        if (!stepping || err > prevErr) {
+            s.restoreLights();
+            stepping = false;
+            err = prevErr;
+        } else {
+            prevErr = err;
+        }
+        if (err < 0.05) stepping = false;
+        cout << err << endl;
         rerasterizeLights();
     }
     glutSwapBuffers();
