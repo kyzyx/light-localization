@@ -679,30 +679,45 @@ bool updateEstimates() {
     // Update positions of all lights
     vector<Vector2f> updatedPositions(candidateLights.size());
     for (int i = 0; i < candidateLights.size(); i++) {
-        // Reset the predicted intensity for this light
-        // to compute better position with other light
-        // intensities decreased
-        float previousIntensity = s.getLight(candidateLights[i])[2];
-        s.changeIntensity(candidateLights[i], -EPSILON);
+        updatedPositions[i] = s.getLight(candidateLights[i]).head(2);
+    }
+    bool converged = false;
+    float minLightMotion = 0.00002f;
+    while (!converged) {
+        float maxdelta = 0;
+        for (int i = 0; i < candidateLights.size(); i++) {
+            // Reset the predicted intensity for this light
+            // to compute better position with other light
+            // intensities decreased
+            float previousIntensity = s.getLight(candidateLights[i])[2];
+            s.changeIntensity(candidateLights[i], -EPSILON);
 
-        // Get updated position
-        recomputeMaxima(maxima);
-        float closest = distancethreshold;
-        int best = -1;
-        Vector2f p2 = s.getLight(candidateLights[i]).head(2);
-        for (int j = 0; j < maxima.size(); j++) {
-            float d = (maxima[j] - p2).squaredNorm();
-            if (d < closest) {
-                closest = d;
-                best = j;
+            // Get updated position
+            recomputeMaxima(maxima);
+            float closest = distancethreshold;
+            int best = -1;
+            Vector2f p2 = s.getLight(candidateLights[i]).head(2);
+            for (int j = 0; j < maxima.size(); j++) {
+                float d = (maxima[j] - p2).squaredNorm();
+                if (d < closest) {
+                    closest = d;
+                    best = j;
+                }
             }
-        }
-        if (best >= 0) {
-            s.moveLight(maxima[best][0], maxima[best][1], i);
-        }
+            if (best >= 0) {
+                float d = (updatedPositions[i] - maxima[best]).squaredNorm();
+                maxdelta = max(d, maxdelta);
+                updatedPositions[i] = maxima[best];
+            }
 
-        // Reset intensities
-        s.changeIntensity(candidateLights[i], previousIntensity);
+            // Reset intensities
+            s.changeIntensity(candidateLights[i], previousIntensity);
+        }
+        if (maxdelta < minLightMotion) converged = true;
+    }
+    for (int i = 0; i < updatedPositions.size(); i++) {
+        s.moveLight(updatedPositions[i][0], updatedPositions[i][1], candidateLights[i]);
+        Vector3f l = s.getLight(candidateLights[i]);
     }
     return true;
 }
