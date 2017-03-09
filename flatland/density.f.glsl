@@ -21,6 +21,30 @@ uniform vec2 adj[9] = vec2[9](
     vec2(-1,-1)
 );
 
+const int NUM_KELLY_COLORS = 20;
+uniform vec4 KellyColors[NUM_KELLY_COLORS] = vec4[NUM_KELLY_COLORS](
+    vec4(255, 179, 0, 255)/255,
+    vec4(128, 62, 117, 255)/255,
+    vec4(255, 104, 0, 255)/255,
+    vec4(166, 189, 215, 255)/255,
+    vec4(193, 0, 32, 255)/255,
+    vec4(206, 162, 98, 255)/255,
+    vec4(129, 112, 102, 255)/255,
+    vec4(0, 125, 52, 255)/255,
+    vec4(246, 118, 142, 255)/255,
+    vec4(0, 83, 138, 255)/255,
+    vec4(255, 122, 92, 255)/255,
+    vec4(83, 55, 122, 255)/255,
+    vec4(255, 142, 0, 255)/255,
+    vec4(179, 40, 81, 255)/255,
+    vec4(244, 200, 0, 255)/255,
+    vec4(127, 24, 13, 255)/255,
+    vec4(147, 170, 0, 255)/255,
+    vec4(89, 51, 21, 255)/255,
+    vec4(241, 58, 19, 255)/255,
+    vec4(35, 44, 22, 255)/255
+);
+
 int cdist(int a, int b) {
     int d = abs(a-b);
     return d>maxidx/2?maxidx-d:d;
@@ -43,9 +67,6 @@ float medialaxis(vec2 st) {
 
 void main() {
     float v = medialaxis(st)*exposure;
-    float a = texture(aux, st).x;
-    vec4 w = a>0.5?vec4(a,0,0,0):vec4(0,0.5+a,0,0);
-    w = a>0.35?w:vec4(0,0,1-a,0);
-    w = a>0.25?w:vec4(0,1-a,1-a,0);
-    color = a>0?w:vec4(v,v,v,1);
+    int i = int(texture(aux, st).x*10);
+    color = i>0?KellyColors[i-1]:vec4(v,v,v,1);
 };

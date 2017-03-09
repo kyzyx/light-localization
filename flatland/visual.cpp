@@ -384,59 +384,38 @@ void rasterizeCircle(float* arr, int w, int h, int x0, int y0, int r, float v=0.
 void rerasterizeLights() {
     memset(auxlayer, 0, width*height*displayscale*displayscale*sizeof(float));
     int ix, iy;
+    int w = width*displayscale;
+    int h = height*displayscale;
     for (int i = 0; i < s.numLights(); i++) {
         Vector2f p = s.getLight(i).head(2);
-        s.world2clip(p, ix, iy, width*displayscale, height*displayscale);
+        s.world2clip(p, ix, iy, w, h);
         float a = s.getLightAngle(i);
-        if (selectedlight == i) {
-            if (s.getLight(i)[2] < 0) {
-                if (i == lastCandidate) rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.3f);
-                else rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.2f);
-            } else {
-                rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 1.f);
-            }
-            if (a >= 0) {
-                rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix + RADIUS*cos(a), iy + RADIUS*sin(a), RADIUS/2, 1.f);
-            }
-        } else {
-            if (s.getLight(i)[2] < 0) {
-                if (i == lastCandidate) rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.3f);
-                else rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.2f);
-            } else {
-                rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.4f);
-            }
-            if (a >= 0) {
-                rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix + RADIUS*cos(a), iy + RADIUS*sin(a), RADIUS/2, 1.f);
-            }
+        float color = 0.1f;
+        if (selectedlight == i) color = 0.2f;
+        else if (s.getLight(i)[2] < 0) {
+            if (i == lastCandidate) color = 0.3f;
+            else color = 0.4f;
+        }
+        rasterizeCircle(auxlayer, w, h, ix, iy, RADIUS, color);
+        if (a >= 0) {
+            rasterizeCircle(auxlayer, w, h, ix + RADIUS*cos(a), iy + RADIUS*sin(a), RADIUS/2, color);
         }
 
         if (s.getSymmetries(i) & 1) {
-            s.world2clip(Vector2f(-p[0], p[1]), ix, iy, width*displayscale, height*displayscale);
-            if (selectedlight == i) {
-                rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.6f);
-            } else {
-                rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.1f);
-            }
+            s.world2clip(Vector2f(-p[0], p[1]), ix, iy, w, h);
+            rasterizeCircle(auxlayer, w, h, ix, iy, RADIUS, color);
         }
         if (s.getSymmetries(i) & 2) {
-            s.world2clip(Vector2f(p[0], -p[1]), ix, iy, width*displayscale, height*displayscale);
-            if (selectedlight == i) {
-                rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.6f);
-            } else {
-                rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.1f);
-            }
+            s.world2clip(Vector2f(p[0], -p[1]), ix, iy, w, h);
+            rasterizeCircle(auxlayer, w, h, ix, iy, RADIUS, color);
         }
         if (s.getSymmetries(i) & 4) {
-            s.world2clip(Vector2f(-p[0], -p[1]), ix, iy, width*displayscale, height*displayscale);
-            if (selectedlight == i) {
-                rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.6f);
-            } else {
-                rasterizeCircle(auxlayer, width*displayscale, height*displayscale, ix, iy, RADIUS, 0.1f);
-            }
+            s.world2clip(Vector2f(-p[0], -p[1]), ix, iy, w, h);
+            rasterizeCircle(auxlayer, w, h, ix, iy, RADIUS, color);
         }
     }
     glBindTexture(GL_TEXTURE_2D, auxtex);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width*displayscale, height*displayscale, GL_RED, GL_FLOAT, auxlayer);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RED, GL_FLOAT, auxlayer);
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 void selectLight(int i) {
