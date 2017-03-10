@@ -596,12 +596,12 @@ void GaussianBlur(float* a, float* b, int w, int h, int r, int nch=3) {
     delete [] G;
 }
 
-void recomputeMaxima(vector<Vector2f>& maxima) {
+void recomputeMaxima(vector<Vector3f>& maxima) {
     maxima.clear();
     int ww = width;
     int hh = height;
 
-    s.computeField();
+    s.computeField(distancefield);
     s.computeDensity(imagecopy);
     GaussianBlur(imagecopy, filtered, ww, hh, 5,1);
 
@@ -625,7 +625,8 @@ void recomputeMaxima(vector<Vector2f>& maxima) {
                     if (!islocalmax) break;
                 }
                 if (islocalmax) {
-                    maxima.push_back(s.clip2world(c,r,ww,hh));
+                    Vector2f p = s.clip2world(c,r,ww,hh);
+                    maxima.push_back(Vector3f(p[0], p[1], distancefield[2*(ww*r+c)]));
                 }
             }
         }
@@ -635,7 +636,7 @@ void recomputeMaxima(vector<Vector2f>& maxima) {
 bool updateEstimates() {
     double distancethreshold = 0.05*s.sceneScale();
     double decrement = -0.03;
-    vector<Vector2f> maxima;
+    vector<Vector3f> maxima;
     vector<int> candidate2maximum(candidateLights.size(), -1);
 
     recomputeMaxima(maxima);
@@ -644,7 +645,7 @@ bool updateEstimates() {
     for (int i = 0; i < maxima.size(); i++) {
         float closest = distancethreshold;
         int best = -1;
-        Vector2f& p = maxima[i];
+        Vector2f p = maxima[i].head(2);
         for (int j = 0; j < candidateLights.size(); j++) {
             Vector2f p2 = s.getLight(candidateLights[j]).head(2);
             float d = (p - p2).norm();
@@ -681,6 +682,7 @@ bool updateEstimates() {
     float minLightMotion = 0.00002f;
     while (!converged) {
         float maxdelta = 0;
+        vector<Vector3f> tmpmaxima;
         for (int i = 0; i < candidateLights.size(); i++) {
             // Reset the predicted intensity for this light
             // to compute better position with other light
@@ -689,21 +691,21 @@ bool updateEstimates() {
             s.changeIntensity(candidateLights[i], -EPSILON);
 
             // Get updated position
-            recomputeMaxima(maxima);
+            recomputeMaxima(tmpmaxima);
             float closest = distancethreshold;
             int best = -1;
             Vector2f p2 = s.getLight(candidateLights[i]).head(2);
-            for (int j = 0; j < maxima.size(); j++) {
-                float d = (maxima[j] - p2).squaredNorm();
+            for (int j = 0; j < tmpmaxima.size(); j++) {
+                float d = (tmpmaxima[j].head(2) - p2).squaredNorm();
                 if (d < closest) {
                     closest = d;
                     best = j;
                 }
             }
             if (best >= 0) {
-                float d = (updatedPositions[i] - maxima[best]).squaredNorm();
+                float d = (updatedPositions[i] - tmpmaxima[best].head(2)).squaredNorm();
                 maxdelta = max(d, maxdelta);
-                updatedPositions[i] = maxima[best];
+                updatedPositions[i] = tmpmaxima[best].head(2);
             }
 
             // Reset intensities
