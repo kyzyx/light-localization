@@ -299,12 +299,11 @@ int currprog;
 enum {
     PROG_ID = 0,
     PROG_SOURCEMAP = 1,
-    PROG_VORONOI = 2,
-    PROG_MEDIALAXIS = 3,
-    PROG_DENSITY = 4,
+    PROG_MEDIALAXIS = 2,
+    PROG_DENSITY = 3,
     NUM_PROGS,
-    PROG_GRAD = 5,
-    PROG_LAPLACIAN = 6,
+    PROG_GRAD = 4,
+    PROG_LAPLACIAN = 5,
     PROG_LOCALMIN = 10,
     PROG_LOCALMAX = 11,
 };
@@ -571,7 +570,7 @@ void draw() {
     //glBindTexture(GL_TEXTURE_BUFFER,tbo_tex);
     //glTexBuffer(GL_TEXTURE_BUFFER,GL_R32F,pbo);
     //
-    if (currprog == PROG_SOURCEMAP || currprog == PROG_VORONOI || currprog == PROG_MEDIALAXIS || currprog == PROG_DENSITY) {
+    if (currprog == PROG_SOURCEMAP || currprog == PROG_MEDIALAXIS || currprog == PROG_DENSITY) {
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     } else {
@@ -596,7 +595,7 @@ void draw() {
         glBindTexture(GL_TEXTURE_2D, tex);
     }
     glUseProgram(progs[currprog]);
-    if (currprog == PROG_SOURCEMAP || currprog == PROG_VORONOI || currprog == PROG_MEDIALAXIS || currprog == PROG_DENSITY) {
+    if (currprog == PROG_SOURCEMAP || currprog == PROG_MEDIALAXIS || currprog == PROG_DENSITY) {
         glUniform1i(glGetUniformLocation(progs[currprog], "maxidx"), s.numSurfels());
     }
     glUniform1f(glGetUniformLocation(progs[currprog], "exposure"), exposure);
@@ -859,7 +858,6 @@ int main(int argc, char** argv) {
     //setupProg("grad.f.glsl",PROG_LAPLACIAN);
     //setupProg("localmin.f.glsl",PROG_LOCALMIN);
     setupProg("sourcemap.f.glsl",PROG_SOURCEMAP);
-    setupProg("voronoi.f.glsl",PROG_VORONOI);
     setupProg("medialaxis.f.glsl",PROG_MEDIALAXIS);
     setupProg("density.f.glsl",PROG_DENSITY);
     currprog = 0;

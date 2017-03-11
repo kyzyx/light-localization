@@ -36,10 +36,11 @@ const float MAX_FLOAT = 1e9;
 
 void main() {
     vec4 m = texture(buffer, st);
+    int idx = (floatBitsToInt(m.y)/4)%2 + 3;
     float c = 2 * PI * floatBitsToInt(m.y) / float(maxidx);
     vec4 mappedcolor = m.x>=MAX_FLOAT?vec4(0,0,0,1):0.5*vec4(sin(c), sin(c+2*PI/3), sin(c+4*PI/3), 1)+0.5;
 
     float a = texture(aux, st).x;
     vec4 w = a>0.5?vec4(a,0,0,0):vec4(0,0.5+a,0,0);
-    color = a>0?w:mappedcolor;
+    color = a>0?w:0.25*idx*mappedcolor;
 };
