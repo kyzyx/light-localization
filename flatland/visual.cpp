@@ -716,7 +716,11 @@ bool updateEstimates() {
     for (int i = 0; i < updatedPositions.size(); i++) {
         s.moveLight(updatedPositions[i][0], updatedPositions[i][1], candidateLights[i]);
         Vector3f l = s.getLight(candidateLights[i]);
+        cout << i << " " << l[0] << " " << l[1] << " " << l[2];
+        if (candidate2maximum[i] >= 0) cout << "(" << maxima[candidate2maximum[i]][2] << ")";
+        cout << endl;
     }
+    cout << "------------" << endl;
     return true;
 }
 
