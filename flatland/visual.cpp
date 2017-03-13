@@ -793,17 +793,26 @@ void draw() {
         memset(imagecopy, 0, 3*ww*hh*sizeof(float));
 
         s.saveLights();
-        stepping = updateEstimates();
-        float err = s.computeError();
-        if (!stepping || err > prevErr) {
-            s.restoreLights();
+        if (!updateEstimates()) {
+            cout << "Terminating: duplicated light" << endl;
             stepping = false;
+        }
+        float err = s.computeError();
+        if (err < 0.05) {
+            cout << "Terminating: negative incident illumination" << endl;
+            stepping = false;
+        }
+        /*if (err > prevErr) {
+            cout << "Terminating: rise in error " << prevErr << " to " << err <<  endl;
+            stepping = false;
+        }*/
+        cout << err << endl;
+        if (!stepping) {
+            s.restoreLights();
             err = prevErr;
         } else {
             prevErr = err;
         }
-        if (err < 0.05) stepping = false;
-        cout << err << endl;
         rerasterizeLights();
     }
     glutSwapBuffers();
