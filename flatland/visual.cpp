@@ -2,12 +2,17 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include "loadshader.h"
 #include "geometry.h"
 #include "cudamap.h"
 #include "options.h"
 #include "fileio.h"
+#include "trackball.h"
 
 const int EPSILON = 1e-9;
 
@@ -121,7 +126,7 @@ class Scene {
             }
             Cudamap_init(&cm, surfels.data(), linedata.data(), circledata.data());
         }
-        void setCudaGLTexture(GLuint tex) {
+        void setCudaGLTexture(GLuint* tex) {
             Cudamap_setGLTexture(&cm, tex);
         }
         void setCudaGLBuffer(GLuint pbo) {
@@ -342,9 +347,12 @@ class Scene {
 };
 
 Scene s;
-GLuint vao;
-GLuint vbo[2];
-GLuint pbo, tbo_tex, tex, auxtex;
+GLuint vao2d;
+GLuint vbo2d[2];
+GLuint vao3d;
+GLuint vbo3d[2];
+GLuint tex[2];
+GLuint pbo, tbo_tex, auxtex;
 GLuint rfr_tex, rfr_fbo_z, rfr_fbo;
 int currprog;
 enum {
@@ -358,8 +366,11 @@ enum {
     PROG_LOCALMIN = 10,
     PROG_LOCALMAX = 11,
 };
+GLuint prog3d;
 GLuint progs[NUM_PROGS];
+glm::mat4 projectionmatrix, viewmatrix;
 float exposure;
+float heightexposure;
 
 int selectedlight = -1;
 int dragging = 0;
@@ -463,6 +474,10 @@ void keydown(unsigned char key, int x, int y) {
         if (exposure > 0.05) exposure -= 0.05;
     } else if (key == '.') {
         exposure += 0.05;
+    } else if (key == 'z') {
+        if (heightexposure > 0.05) heightexposure -= 0.05;
+    } else if (key == 'x') {
+        heightexposure += 0.05;
     } else if (key == 'm') {
         currprog = (currprog+1)%NUM_PROGS;
     } else if (key == ' ') {
@@ -516,7 +531,42 @@ void keydown(unsigned char key, int x, int y) {
     }
 }
 
-void click(int button, int state, int x, int y) {
+// Trackball vars
+int ox, oy;
+bool moving;
+float lastquat[4];
+float curquat[4];
+float camdist = 5;
+void click3d(int button, int state, int x, int y) {
+    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+        moving = true;
+        ox = x;
+        oy = y;
+    } else if (button == GLUT_LEFT_BUTTON && state == GLUT_UP) {
+        moving = false;
+    } else if(button == 3) { // Mouse wheel up
+        camdist *= 1.1;
+    } else if(button == 4) { // Mouse wheel down
+        camdist /= 1.1;
+    }
+}
+void mousemove3d(int x, int y) {
+    int ww = width*displayscale;
+    int hh = height*displayscale;
+    if (moving) {
+        trackball(lastquat,
+            (2*ox-ww)/(float)ww,
+            (hh-2*oy)/(float)hh,
+            (2*x-ww)/(float)ww,
+            (hh-2*y)/(float)hh
+        );
+        ox = x;
+        oy = y;
+        add_quats(lastquat, curquat, curquat);
+    }
+}
+
+void click2d(int button, int state, int x, int y) {
     if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
         Vector2f p = s.clip2world(x,height*displayscale-y,width*displayscale,height*displayscale);
         Vector2f p2 = s.clip2world(x+RADIUS,height*displayscale-y,width*displayscale,height*displayscale);
@@ -545,13 +595,23 @@ void click(int button, int state, int x, int y) {
         dragging = 0;
     }
 }
-void mousemove(int x, int y) {
+void mousemove2d(int x, int y) {
     if (dragging && selectedlight >= 0) {
         Vector2f p = s.clip2world(x,height*displayscale-y,width*displayscale,height*displayscale);
         p += offset;
         s.moveLight(p[0], p[1], selectedlight);
         rerasterizeLights();
     }
+}
+
+
+void click(int button, int state, int x, int y) {
+    if (x > width*displayscale) click3d(button, state, x-width*displayscale, y);
+    else click2d(button, state, x, y);
+}
+void mousemove(int x, int y) {
+    if (x > width*displayscale) mousemove3d(x-width*displayscale,y);
+    else mousemove2d(x,y);
 }
 
 bool any(unsigned char* a, int w, int h, int x, int y, int d = 1) {
@@ -724,23 +784,10 @@ bool updateEstimates() {
     return true;
 }
 
-void draw() {
-    if (shouldWritePlyFile || shouldWriteExrFile) {
-        s.computeField(distancefield);
-        if (shouldWritePlyFile) {
-            outputPLY(plyFilename.c_str(), distancefield, width, height, 2, displayscale==1?auxlayer:NULL);
-            shouldWritePlyFile = false;
-        }
-        if (shouldWriteExrFile) {
-            outputEXR(exrFilename.c_str(), distancefield, width, height, 2);
-            shouldWriteExrFile = false;
-        }
-    } else {
-        s.computeField();
-    }
-    glBindVertexArray(vao);
+void draw2D() {
+    glBindVertexArray(vao2d);
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, tex);
+    glBindTexture(GL_TEXTURE_2D, tex[0]);
     //glBindTexture(GL_TEXTURE_BUFFER,tbo_tex);
     //glTexBuffer(GL_TEXTURE_BUFFER,GL_R32F,pbo);
     //
@@ -766,7 +813,7 @@ void draw() {
         glBindTexture(GL_TEXTURE_2D, rfr_tex);
     } else {
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, tex);
+        glBindTexture(GL_TEXTURE_2D, tex[0]);
     }
     glUseProgram(progs[currprog]);
     if (currprog == PROG_SOURCEMAP || currprog == PROG_MEDIALAXIS || currprog == PROG_DENSITY) {
@@ -782,6 +829,51 @@ void draw() {
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, 0);
     glBindVertexArray(0);
+}
+
+void draw3D() {
+    // Setup camera
+    glm::fquat rot(curquat[3], curquat[0], curquat[1], curquat[2]);
+    viewmatrix = glm::translate(glm::mat4(1), glm::vec3(0,0,-camdist));
+    viewmatrix = viewmatrix*glm::mat4_cast(glm::inverse(rot));
+
+    glBindVertexArray(vao3d);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, tex[1]);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glUseProgram(prog3d);
+    glUniform1f(glGetUniformLocation(prog3d, "exposure"), heightexposure);
+    glUniformMatrix4fv(glGetUniformLocation(prog3d, "view"), 1, GL_FALSE, glm::value_ptr(viewmatrix));
+    glUniformMatrix4fv(glGetUniformLocation(prog3d, "proj"), 1, GL_FALSE, glm::value_ptr(projectionmatrix));
+    // Exposure interaction
+    // Compute density as texture
+    glDrawElements(GL_TRIANGLES, (width-1)*(height-1)*2*3, GL_UNSIGNED_INT, 0);
+    glUseProgram(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glBindVertexArray(0);
+}
+
+void draw() {
+    if (shouldWritePlyFile || shouldWriteExrFile) {
+        s.computeField(distancefield);
+        if (shouldWritePlyFile) {
+            outputPLY(plyFilename.c_str(), distancefield, width, height, 2, displayscale==1?auxlayer:NULL);
+            shouldWritePlyFile = false;
+        }
+        if (shouldWriteExrFile) {
+            outputEXR(exrFilename.c_str(), distancefield, width, height, 2);
+            shouldWriteExrFile = false;
+        }
+    } else {
+        s.computeField();
+        s.computeDensity();
+    }
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glViewport(0,0,displayscale*width,displayscale*height);
+    draw2D();
+    glViewport(displayscale*width,0,displayscale*width,displayscale*height);
+    draw3D();
     if (shouldWritePngFile) {
         glReadPixels(0,0,width*displayscale, height*displayscale, GL_RGB, GL_UNSIGNED_BYTE, (void*) imagedata);
         outputPNG(pngFilename.c_str(), imagedata, width*displayscale, height*displayscale);
@@ -825,7 +917,7 @@ void draw() {
 void setupWindow(int argc, char** argv, int w, int h) {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
-    glutInitWindowSize(w, h);
+    glutInitWindowSize(2*w, h);
     glutCreateWindow("Light Localization");
     glutDisplayFunc(draw);
     glutIdleFunc(draw);
@@ -833,6 +925,7 @@ void setupWindow(int argc, char** argv, int w, int h) {
     glutMouseFunc(click);
     glutMotionFunc(mousemove);
     openglInit();
+    glClearColor(0,0,0.2,1);
 }
 
 void initRenderTextures() {
@@ -865,11 +958,15 @@ void initCudaGlTextures() {
     glTexBuffer(GL_TEXTURE_BUFFER, GL_R32F, pbo);
     glBindTexture(GL_TEXTURE_BUFFER, 0);
 
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
+    glGenTextures(2, tex);
+    glBindTexture(GL_TEXTURE_2D, tex[0]);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RG32F, width, height, 0, GL_RG, GL_FLOAT, 0);
+    glBindTexture(GL_TEXTURE_2D, tex[1]);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, width, height, 0, GL_RED, GL_FLOAT, 0);
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
@@ -904,19 +1001,60 @@ void setupFullscreenQuad() {
         1.f, 1.f,
         0.f, 1.f
     };
-    glGenVertexArrays(1, &vao);
-    glGenBuffers(2, vbo);
-    glBindVertexArray(vao);
+    glGenVertexArrays(1, &vao2d);
+    glGenBuffers(2, vbo2d);
+    glBindVertexArray(vao2d);
     glEnableVertexAttribArray(0);
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo2d[0]);
     glBufferData(GL_ARRAY_BUFFER, 6*3*sizeof(float), points, GL_STATIC_DRAW);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo2d[1]);
     glBufferData(GL_ARRAY_BUFFER, 6*2*sizeof(float), texcoords, GL_STATIC_DRAW);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
+}
+
+void setupHeightmap() {
+    float* points = new float[width*height*3];
+    int numtris = (width-1)*(height-1)*2*3;
+    unsigned int* tris = new unsigned int[numtris];
+    for (int i = 0; i < width*height; i++) {
+        points[3*i] = (i%width)/(float) width - 0.5;
+        points[3*i+1] = (i/width)/(float) width - 0.5;
+        points[3*i+2] = 0;
+    }
+    int z;
+    for (int i = 0; i < (width-1)*(height-1); i++) {
+        int x = i%(width-1);
+        int y = i/(width-1);
+        int idx = x + y*width;
+        tris[z++] = idx;
+        tris[z++] = idx+1;
+        tris[z++] = idx+1+width;
+        tris[z++] = idx;
+        tris[z++] = idx+1+width;
+        tris[z++] = idx+width;
+    }
+    glGenVertexArrays(1, &vao3d);
+    glGenBuffers(2, vbo3d);
+    glBindVertexArray(vao3d);
+    glEnableVertexAttribArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo3d[0]);
+    glBufferData(GL_ARRAY_BUFFER, width*height*3*sizeof(float), points, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo3d[1]);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, numtris*sizeof(unsigned int), tris, GL_STATIC_DRAW);
+    glBindVertexArray(0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    delete [] points;
+    delete [] tris;
+
+    glEnable(GL_DEPTH_TEST);
+    projectionmatrix = glm::perspective(45.f, width/(float)height, 0.01f, 10.f);
+    trackball(curquat, 0.0, 0.0, 0.0, 0.0);
 }
 
 bool endswith(const string& s, string e) {
@@ -963,8 +1101,10 @@ int main(int argc, char** argv) {
     initCudaGlTextures();
     initRenderTextures();
     setupFullscreenQuad();
+    setupHeightmap();
 
     exposure = 0.5;
+    heightexposure = 0.2;
 
     setupProg("tboshader.f.glsl",PROG_ID);
     //setupProg("grad.f.glsl",PROG_GRAD);
@@ -973,6 +1113,17 @@ int main(int argc, char** argv) {
     setupProg("sourcemap.f.glsl",PROG_SOURCEMAP);
     setupProg("medialaxis.f.glsl",PROG_MEDIALAXIS);
     setupProg("density.f.glsl",PROG_DENSITY);
+
+    ShaderProgram* prog;
+    prog = new FileShaderProgram("heightmap.v.glsl", "heightmap.f.glsl");
+    prog->init();
+    prog3d = prog->getProgId();
+    delete prog;
+    glUseProgram(prog3d);
+    glUniform1i(glGetUniformLocation(prog3d, "buffer"), 0);
+    glUniform2i(glGetUniformLocation(prog3d, "dim"), width, height);
+    glUseProgram(0);
+
     currprog = 0;
     if (options[MODE]) {
         currprog = atoi(options[MODE].arg)%NUM_PROGS;

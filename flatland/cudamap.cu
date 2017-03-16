@@ -322,15 +322,22 @@ void Cudamap_init(Cudamap* cudamap, float* surfels, float* line_occluders, float
     cudaMemset((void*) cudamap->d_intensities, 0, sizeof(float)*cudamap->n);
 }
 
-void Cudamap_setGLTexture(Cudamap* cudamap, unsigned int tex) {
+void Cudamap_setGLTexture(Cudamap* cudamap, unsigned int* tex) {
     cudaGLSetGLDevice(0);
     cudaStream_t cuda_stream;
     cudaGraphicsResource *resources[1];
 
-    cudaGraphicsGLRegisterImage(resources, tex, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsSurfaceLoadStore);
+    cudaGraphicsGLRegisterImage(resources, tex[0], GL_TEXTURE_2D, cudaGraphicsRegisterFlagsSurfaceLoadStore);
     cudaStreamCreate(&cuda_stream);
     cudaGraphicsMapResources(1, resources, cuda_stream);
     cudaGraphicsSubResourceGetMappedArray(&(cudamap->d_field_tex), resources[0], 0, 0);
+    cudaGraphicsUnmapResources(1, resources, cuda_stream);
+    cudaStreamDestroy(cuda_stream);
+
+    cudaGraphicsGLRegisterImage(resources, tex[1], GL_TEXTURE_2D, cudaGraphicsRegisterFlagsSurfaceLoadStore);
+    cudaStreamCreate(&cuda_stream);
+    cudaGraphicsMapResources(1, resources, cuda_stream);
+    cudaGraphicsSubResourceGetMappedArray(&(cudamap->d_density_tex), resources[0], 0, 0);
     cudaGraphicsUnmapResources(1, resources, cuda_stream);
     cudaStreamDestroy(cuda_stream);
 }
@@ -431,6 +438,9 @@ void Cudamap_computeDensity(Cudamap* cudamap, float* density, float threshold)
     cuComputeDensity<<< blocks, threads >>>(
         cudamap->d_field, cudamap->d_density, n, w, h, threshold
     );
+    if (cudamap->d_density_tex) {
+        cudaMemcpyToArray(cudamap->d_density_tex, 0, 0, cudamap->d_density, sizeof(float)*w*h, cudaMemcpyDeviceToDevice);
+    }
 
     cudaMemcpy(density, cudamap->d_density, sizeof(float)*w*h, cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize();

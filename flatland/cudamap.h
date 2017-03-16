@@ -12,6 +12,7 @@ typedef struct {
     float2* d_field;
     float* d_density;
     cudaArray* d_field_tex;
+    cudaArray* d_density_tex;
 
     // Occluder counts
     int nlines, ncircles;
@@ -23,7 +24,7 @@ typedef struct {
 } Cudamap;
 
 extern "C" void Cudamap_init(Cudamap* cudamap, float* surfels, float* line_occluders=NULL, float* circle_occluders=NULL);
-extern "C" void Cudamap_setGLTexture(Cudamap* cudamap, unsigned int tex);
+extern "C" void Cudamap_setGLTexture(Cudamap* cudamap, unsigned int* tex);
 extern "C" void Cudamap_setGLBuffer(Cudamap* cudamap, unsigned int pbo);
 extern "C" void Cudamap_free(Cudamap* cudamap);
 extern "C" void Cudamap_setIntensities(Cudamap* cudamap, float* intensities);
