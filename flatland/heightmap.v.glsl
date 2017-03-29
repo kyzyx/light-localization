@@ -1,6 +1,7 @@
 #version 330
 layout (location=0) in vec3 pos;
 out vec3 normal;
+out vec2 st;
 
 uniform float exposure;
 uniform mat4 view;
@@ -26,7 +27,7 @@ vec3 gradient(vec2 st) {
 }
 
 void main() {
-   vec2 st = pos.xy+0.5+(0.5/dim.x);
+   st = pos.xy+0.5+(0.5/dim.x);
    float f = texture(buffer, st).x;
    gl_Position = proj*view*vec4(pos.xy,f>EINF?0:f*exposure,1);
    normal = gradient(st);
