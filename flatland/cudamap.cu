@@ -1,4 +1,5 @@
 #include "cudamap.h"
+#include "convolutionSeparable_common.h"
 #include <cuda_gl_interop.h>
 #include <stdio.h>
 
@@ -307,12 +308,18 @@ __global__ void cuComputeDensity(
     }
 }
 
+float Gaussian(float x, float std) {
+    return exp(-(x*x)/(2*std*std))/(sqrt(2*M_PI)*std);
+}
+
 void Cudamap_init(Cudamap* cudamap, float* surfels, float* line_occluders, float* circle_occluders) {
     cudaSetDevice(0);
     cudaMalloc((void**) &(cudamap->d_intensities), sizeof(float)*cudamap->n);
     cudaMalloc((void**) &(cudamap->d_surfels), sizeof(float4)*cudamap->n);
     cudaMalloc((void**) &(cudamap->d_field), sizeof(float2)*cudamap->w*cudamap->h);
     cudaMalloc((void**) &(cudamap->d_density), sizeof(float)*cudamap->w*cudamap->h);
+    cudaMalloc((void**) &(cudamap->d_buffer), sizeof(float)*cudamap->w*cudamap->h);
+    cudaMalloc((void**) &(cudamap->d_tmp), sizeof(float)*cudamap->w*cudamap->h);
     cudaMalloc((void**) &(cudamap->d_line_occluders), sizeof(float4)*cudamap->nlines);
     cudaMalloc((void**) &(cudamap->d_circle_occluders), sizeof(float4)*cudamap->ncircles);
 
@@ -320,6 +327,21 @@ void Cudamap_init(Cudamap* cudamap, float* surfels, float* line_occluders, float
     if (cudamap->nlines) cudaMemcpy(cudamap->d_line_occluders, line_occluders, sizeof(float4)*cudamap->nlines, cudaMemcpyHostToDevice);
     if (cudamap->ncircles) cudaMemcpy(cudamap->d_circle_occluders, circle_occluders, sizeof(float4)*cudamap->ncircles, cudaMemcpyHostToDevice);
     cudaMemset((void*) cudamap->d_intensities, 0, sizeof(float)*cudamap->n);
+
+    float kernel[KERNEL_LENGTH];
+    float tot = 0;
+    for (int i = 0; i <= KERNEL_RADIUS; i++) {
+        kernel[KERNEL_RADIUS-i] = Gaussian(i, 2.5);
+        kernel[KERNEL_RADIUS+i] = kernel[KERNEL_RADIUS-i];
+    }
+    for (int i = 0; i < KERNEL_LENGTH; i++) {
+        tot += kernel[i];
+    }
+    for (int i = 0; i < KERNEL_LENGTH; i++) {
+        kernel[i] /= tot;
+    }
+
+    setConvolutionKernel(kernel);
 }
 
 void Cudamap_setGLTexture(Cudamap* cudamap, unsigned int* tex) {
@@ -358,6 +380,8 @@ void Cudamap_setGLBuffer(Cudamap* cudamap, unsigned int pbo) {
 
 void Cudamap_free(Cudamap* cudamap) {
     cudaFree(cudamap->d_surfels);
+    cudaFree(cudamap->d_buffer);
+    cudaFree(cudamap->d_tmp);
     cudaFree(cudamap->d_intensities);
     cudaFree(cudamap->d_field);
 }
@@ -430,14 +454,19 @@ void Cudamap_computeDensity(Cudamap* cudamap, float* density, float threshold)
     int n = cudamap->n;
     int w = cudamap->w;
     int h = cudamap->h;
+    cudaMemset(cudamap->d_buffer, 0, sizeof(float)*w*h);
+    cudaMemset(cudamap->d_tmp, 0, sizeof(float)*w*h);
     cudaMemset(cudamap->d_density, 0, sizeof(float)*w*h);
 
     dim3 threads(16, 16, 1);
     dim3 blocks((w+15)/16-1, (h+15)/16-1, 1);
 
     cuComputeDensity<<< blocks, threads >>>(
-        cudamap->d_field, cudamap->d_density, n, w, h, threshold
+        cudamap->d_field, cudamap->d_buffer, n, w, h, threshold
+        /*cudamap->d_field, cudamap->d_density, n, w, h, threshold*/
     );
+    convolutionRowsGPU(cudamap->d_tmp, cudamap->d_buffer, w, h);
+    convolutionColumnsGPU(cudamap->d_density, cudamap->d_tmp, w, h);
     if (cudamap->d_density_tex) {
         cudaMemcpyToArray(cudamap->d_density_tex, 0, 0, cudamap->d_density, sizeof(float)*w*h, cudaMemcpyDeviceToDevice);
     }

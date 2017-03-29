@@ -24,7 +24,6 @@ float prevErr = 1e9;
 unsigned char* imagedata;
 unsigned char* medialaxis;
 float* imagecopy;
-float* filtered;
 float* distancefield;
 
 using namespace std;
@@ -624,38 +623,6 @@ bool any(unsigned char* a, int w, int h, int x, int y, int d = 1) {
     return false;
 }
 
-void GaussianBlur(float* a, float* b, int w, int h, int r, int nch=3) {
-    float* G = new float[r+1];
-    float tot = 0;
-    for (int i = 0; i < r+1; i++) {
-        float sigma = r/3.f;
-        G[i] = exp(-i*i/(2*r*r));
-        tot += 2*G[i];
-    }
-    tot -= 1;
-    for (int i = 0; i < r+1; i++) G[i] /= tot;
-    float* c = new float[nch*w*h];
-    memset(c, 0, sizeof(float)*nch*w*h);
-    // Horizontal
-    for (int i = r; i < h-r; i++) {
-        for (int j = r; j < w-r; j++) {
-            for (int k = -r; k <= r; k++) {
-                for (int ch = 0; ch < nch; ch++) c[nch*(i*w+j)+ch] += G[abs(k)]*a[nch*(i*w+j+k)+ch];
-            }
-        }
-    }
-    // Vertical
-    for (int i = r; i < h-r; i++) {
-        for (int j = r; j < w-r; j++) {
-            for (int k = -r; k <= r; k++) {
-                for (int ch = 0; ch < nch; ch++) b[nch*(i*w+j)+ch] += G[abs(k)]*c[nch*((i+k)*w+j)+ch];
-            }
-        }
-    }
-    delete [] c;
-    delete [] G;
-}
-
 void recomputeMaxima(vector<Vector3f>& maxima) {
     maxima.clear();
     int ww = width;
@@ -663,20 +630,19 @@ void recomputeMaxima(vector<Vector3f>& maxima) {
 
     s.computeField(distancefield);
     s.computeDensity(imagecopy);
-    GaussianBlur(imagecopy, filtered, ww, hh, 5,1);
 
     float lowthreshold = 0.5;
     int nbrhd = 15;
     int margin = 8;
     for (int r = margin; r < hh-margin; r++) {
         for (int c = margin; c < ww-margin; c++) {
-            float fv = filtered[r*ww+c];
+            float fv = imagecopy[r*ww+c];
             if (fv > lowthreshold) {
                 bool islocalmax = true;
                 for (int i = -nbrhd; i <= nbrhd; i++) {
                     for (int j = -nbrhd; j <= nbrhd; j++) {
                         if (i == 0 && j == 0) continue;
-                        float v = filtered[(r+i)*ww+c+j];
+                        float v = imagecopy[(r+i)*ww+c+j];
                         if (v >= fv) {
                             islocalmax = false;
                             break;
@@ -885,7 +851,6 @@ void draw() {
     if (stepping) {
         int ww = width;
         int hh = height;
-        memset(filtered, 0, 3*ww*hh*sizeof(float));
         memset(imagecopy, 0, 3*ww*hh*sizeof(float));
 
         s.saveLights();
@@ -1025,7 +990,7 @@ void setupHeightmap() {
         points[3*i+1] = (i/width)/(float) width - 0.5;
         points[3*i+2] = 0;
     }
-    int z;
+    int z = 0;
     for (int i = 0; i < (width-1)*(height-1); i++) {
         int x = i%(width-1);
         int y = i/(width-1);
@@ -1086,7 +1051,6 @@ int main(int argc, char** argv) {
     setupWindow(argc, argv, ww, hh);
     imagedata = new unsigned char[3*ww*hh];
     medialaxis = new unsigned char[3*ww*hh];
-    filtered = new float[3*ww*hh];
     imagecopy = new float[3*ww*hh];
     distancefield = new float[2*width*height];
     auxlayer = new float[ww*hh];
