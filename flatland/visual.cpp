@@ -6,12 +6,14 @@
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <ceres/ceres.h>
 
 #include "loadshader.h"
 #include "geometry.h"
 #include "cudamap.h"
 #include "options.h"
 #include "fileio.h"
+#include "solveCeres.h"
 #include "trackball.h"
 
 const int EPSILON = 1e-9;
@@ -93,6 +95,9 @@ class Scene {
             }
             ncircles++;
         }
+        float getSurfel(int i) {
+            return surfels[i];
+        }
         int numSurfels() const {
             return surfels.size()/4;
         }
@@ -141,6 +146,13 @@ class Scene {
         // --------- Light Manipulation ---------
         int numLights() const {
             return lights.size();
+        }
+        int numPredictedLights() const {
+            int ret = 0;
+            for (int i = 0; i < lights.size(); i++) {
+                if (lights[i][2] < 0) ret++;
+            }
+            return ret;
         }
         Vector3f getLight(int idx) const {
             return lights[idx];
@@ -258,6 +270,40 @@ class Scene {
             falloffs.push_back(falloff);
             symmetries.push_back(0);
         }
+        // Optimization functions
+        void getOptimizationArrays(double* opt_lightparams, double* opt_geometry, double* opt_intensities)
+        {
+            computeLighting();
+            memcpy(opt_intensities, intensities.data(), sizeof(double)*intensities.size());
+            for (int i = 0, z = 0; i < lights.size(); i++) {
+                if (lights[i][2] < 0) {
+                    opt_lightparams[z++] = lights[i][0];
+                    opt_lightparams[z++] = lights[i][1];
+                    opt_lightparams[z++] = -lights[i][2];
+                }
+            }
+        }
+        void computeLighting() {
+            intensities.clear();
+            int dim = 2;
+            for (int i = 0; i < surfels.size(); i += 2*dim) {
+                double tot = 0;
+                for (int j = 0; j < lights.size(); j++) {
+                    if (lights[j][dim] < 0) continue;
+                    // FIXME: non-point lights?
+                    double LdotL = 0;
+                    double ndotLn = 0;
+                    for (int k = 0; k < dim; k++) {
+                        double L = lights[j][k]-surfels[i+k];
+                        ndotLn += surfels[i+dim+k]*L;
+                        LdotL += L*L;
+                    }
+                    ndotLn /= sqrt(LdotL);
+                    tot += ndotLn>0?lights[j][dim]*ndotLn/LdotL:0;
+                }
+                intensities.push_back(tot);
+            }
+        }
         float computeError() {
             float total = 0;
             float n = 0;
@@ -330,6 +376,7 @@ class Scene {
 
         Vector2f minp, maxp;
 
+        vector<double> intensities;
         vector<float> surfels;
         vector<Line> lines;
         vector<Vector3f> circles;
@@ -370,6 +417,12 @@ GLuint progs[NUM_PROGS];
 glm::mat4 projectionmatrix, viewmatrix;
 float exposure;
 float heightexposure;
+
+// Optimization variables
+int nlightparams = 0;
+double* lightparams = NULL;
+double* geometry = NULL;
+double* intensities = NULL;
 
 int selectedlight = -1;
 int dragging = 0;
@@ -747,6 +800,17 @@ bool updateEstimates() {
         cout << endl;
     }
     cout << "------------" << endl;
+    // Optimize
+    if (s.numPredictedLights() != nlightparams) {
+        if (lightparams) delete [] lightparams;
+        nlightparams = s.numPredictedLights();
+        lightparams = new double[nlightparams*3];
+    }
+    s.getOptimizationArrays(lightparams, geometry, intensities);
+    double cost = solveCeres(geometry, intensities, s.numSurfels(), lightparams, nlightparams);
+    if (cost < 1) {
+        cout << "Solution found" << endl;
+    }
     return true;
 }
 
@@ -1131,6 +1195,15 @@ int main(int argc, char** argv) {
 
         s.addLight(0,0);
     }
+    // Initialize optimization variables
+    geometry = new double[4*s.numSurfels()];
+    for (int i = 0; i < s.numSurfels(); i++) {
+        for (int j = 0; j < 4; j++) {
+            geometry[4*i+j] = s.getSurfel(4*i+j);
+        }
+    }
+    intensities = new double[s.numSurfels()];
+    google::InitGoogleLogging("solveCeres()");
 
     if (options[EXIT_IMMEDIATELY]) {
         shouldExitImmediately = true;
