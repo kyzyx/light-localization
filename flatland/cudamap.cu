@@ -1,5 +1,5 @@
 #include "cudamap.h"
-#include "convolutionSeparable_common.h"
+#include "convolutionSeparable.h"
 #include <cuda_gl_interop.h>
 #include <stdio.h>
 

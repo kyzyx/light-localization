@@ -12,7 +12,7 @@
 
 
 #include <assert.h>
-#include "convolutionSeparable_common.h"
+#include "convolutionSeparable.h"
 
 
 
