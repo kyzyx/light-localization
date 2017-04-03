@@ -4,3 +4,6 @@ threed
 *.lt
 .*.swp
 *.vlm
+
+*.txt
+*.ply
