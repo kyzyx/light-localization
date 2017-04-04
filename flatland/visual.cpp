@@ -271,15 +271,16 @@ class Scene {
             symmetries.push_back(0);
         }
         // Optimization functions
-        void getOptimizationArrays(double* opt_lightparams, double* opt_geometry, double* opt_intensities)
+        void getOptimizationArrays(double* opt_lightparams, double* opt_lightintensities, double* opt_geometry, double* opt_intensities)
         {
             computeLighting();
             memcpy(opt_intensities, intensities.data(), sizeof(double)*intensities.size());
             for (int i = 0, z = 0; i < lights.size(); i++) {
                 if (lights[i][2] < 0) {
-                    opt_lightparams[z++] = lights[i][0];
-                    opt_lightparams[z++] = lights[i][1];
-                    opt_lightparams[z++] = -lights[i][2];
+                    opt_lightparams[2*z] = lights[i][0];
+                    opt_lightparams[2*z+1] = lights[i][1];
+                    opt_lightintensities[z] = -lights[i][2];
+                    z++;
                 }
             }
         }
@@ -421,6 +422,7 @@ float heightexposure;
 // Optimization variables
 int nlightparams = 0;
 double* lightparams = NULL;
+double* lightintensities = NULL;
 double* geometry = NULL;
 double* intensities = NULL;
 
@@ -719,6 +721,7 @@ bool updateEstimates() {
     vector<int> candidate2maximum(candidateLights.size(), -1);
 
     recomputeMaxima(maxima);
+    bool lightadded = false;
 
     // Associate maxima with existing lights, adding new lights if necessary
     for (int i = 0; i < maxima.size(); i++) {
@@ -740,6 +743,7 @@ bool updateEstimates() {
                 cout << "Error: lights too close together!" << endl;
             }
         } else {
+            lightadded = true;
             candidateLights.push_back(s.numLights());
             candidate2maximum.push_back(i);
             s.addLight(p[0], p[1], -EPSILON);
@@ -800,16 +804,23 @@ bool updateEstimates() {
         cout << endl;
     }
     cout << "------------" << endl;
-    // Optimize
-    if (s.numPredictedLights() != nlightparams) {
-        if (lightparams) delete [] lightparams;
-        nlightparams = s.numPredictedLights();
-        lightparams = new double[nlightparams*3];
-    }
-    s.getOptimizationArrays(lightparams, geometry, intensities);
-    double cost = solveCeres(geometry, intensities, s.numSurfels(), lightparams, nlightparams);
-    if (cost < 1) {
-        cout << "Solution found" << endl;
+    if (lightadded) {
+        // Optimize
+        if (s.numPredictedLights() != nlightparams) {
+            if (lightparams) delete [] lightparams;
+            if (lightintensities) delete [] lightintensities;
+            nlightparams = s.numPredictedLights();
+            lightparams = new double[nlightparams*2];
+            lightintensities = new double[nlightparams];
+        }
+        s.getOptimizationArrays(lightparams, lightintensities, geometry, intensities);
+        double costi = solveIntensitiesCeres(geometry, intensities, s.numSurfels(), lightparams, lightintensities, nlightparams);
+        double costj = solveCeres(geometry, intensities, s.numSurfels(), lightparams, lightintensities, nlightparams);
+        cout << "Cost: " << costj << "(" << costi << ")"<< endl;
+        if (costj < 1) {
+            cout << "Solution found" << endl;
+            return false;
+        }
     }
     return true;
 }

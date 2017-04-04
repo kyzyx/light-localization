@@ -116,6 +116,10 @@ Scene s;
 
 
 int main(int argc, char** argv) {
+    double* lightparams;
+    double* lightintensities;
+    double* geometry;
+    double* intensities;
     if (argc > 1) {
         ifstream in(argv[1]);
         int nsegs, nlights, type;
@@ -139,36 +143,37 @@ int main(int argc, char** argv) {
             in >> x >> y >> z;
             s.addLight(x, y, z);
         }
+        lightparams = new double[s.lights.size()*2];
+        lightintensities = new double[s.lights.size()];
         s.computeLighting();
     } else {
         s.addCircle(Vector2f(0,0), 1.0f, 0.007f);
         s.addLight(0,0);
         s.computeLighting();
+        lightparams = new double[s.lights.size()*2];
+        lightintensities = new double[s.lights.size()];
     }
+    geometry = new double[s.surfels.size()];
+    intensities = new double[s.intensities.size()];
     generator.seed(time(0));
     int success = 0;
     int num_trials = 500;
     google::InitGoogleLogging("solveCeres()");
     for (int i = 0; i < num_trials; i++) {
-        double* lightparams = new double[s.lights.size()*3];
-        double* geometry = new double[s.surfels.size()];
         memcpy(geometry, s.surfels.data(), sizeof(double)*s.surfels.size());
-        double* intensities = new double[s.intensities.size()];
         memcpy(intensities, s.intensities.data(), sizeof(double)*s.intensities.size());
-        for (int j = 0; j < s.lights.size(); j++) {
-            lightparams[3*j+0] = randf();
-            lightparams[3*j+1] = randf();
-            lightparams[3*j+2] = 5;
-        }
-        double cost = solveCeres(geometry, intensities, s.intensities.size(),
-                lightparams, s.lights.size());
+        double costi = solveIntensitiesCeres(geometry, intensities, s.intensities.size(),
+                lightparams, lightintensities, s.lights.size());
+        double costj = solveCeres(geometry, intensities, s.intensities.size(),
+                lightparams, lightintensities, s.lights.size());
         //cout << "Run " << i+1 << " " ;
-        /*cout << cost << " { ";
+        /*cout << costj << " " << costi << " { ";
         for (int j = 0; j < s.lights.size(); j++) {
-            for (int k = 0; k < 3; k++) cout << lightparams[3*j+k] << " ";
+            for (int k = 0; k < 2; k++) cout << lightparams[2*j+k] << " ";
+            cout << lightintensities[j] << endl;
         }
         cout << " }" << endl;*/
-        if (cost < 1) success++;
+        if (costj < 1) success++;
     }
     cout << success / (float) num_trials << endl;
 }
