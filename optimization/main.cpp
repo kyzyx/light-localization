@@ -28,7 +28,7 @@ class Scene {
             Vector2f v = l.vec();
             double d = l.length();
             Vector2f n = l.normal();
-            for (double i = 0; i < d; i+= res) {
+            for (double i = res/2; i < d; i+= res) {
                 Vector2f p = l.p1 + i*v;
                 surfels.push_back(p[0]);
                 surfels.push_back(p[1]);
