@@ -770,7 +770,7 @@ void recomputeMaxima(vector<Vector3f>& maxima) {
 }
 
 bool updateEstimates() {
-    double distancethreshold = 0.05*s.sceneScale();
+    double distancethreshold = 0.08*s.sceneScale();
     double decrement = -0.03;
     vector<Vector3f> maxima;
     vector<int> candidate2maximum(candidateLights.size(), -1);
@@ -872,7 +872,7 @@ bool updateEstimates() {
         double costi = solveIntensitiesCeres(geometry, intensities, s.numSurfels(), lightparams, lightintensities, nlightparams);
         double costj = solveCeres(geometry, intensities, s.numSurfels(), lightparams, lightintensities, nlightparams);
         cout << "Cost: " << costj << "(" << costi << ")"<< endl;
-        if (costj < 1) {
+        if (costj < 0.0001) {
             s.setFromOptimization(lightparams, lightintensities);
             for (int i = 0; i < nlightparams; i++) {
                 cout << i << ":" <<  lightparams[2*i] << " " << lightparams[2*i+1] << " " << lightintensities[i] << endl;
