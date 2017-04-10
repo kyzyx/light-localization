@@ -10,6 +10,7 @@
 
 #include "loadshader.h"
 #include "geometry.h"
+#include "glplot.h"
 #include "cudamap.h"
 #include "options.h"
 #include "fileio.h"
@@ -58,7 +59,9 @@ string helpstring =
 
 class Scene {
     public:
-        Scene() : minp(Vector2f(0,0)), maxp(Vector2f(0,0)), ncircles(0) { }
+        Scene() : minp(Vector2f(0,0)), maxp(Vector2f(0,0)), ncircles(0) {
+            surfelIdx.push_back(0);
+        }
         ~Scene() { Cudamap_free(&cm); }
 
         // --------- Geometry Manipulation ---------
@@ -76,6 +79,15 @@ class Scene {
                 surfels.push_back(n[1]);
             }
             lines.push_back(l);
+            surfelIdx.push_back(surfels.size()/4);
+            for (int i = 0; i < 3; i++) {
+                GLPlot* plot = new GLPlot();
+                float c[3];
+                for (int j = 0; j < 3; j++) c[j] = 0;
+                c[i] = 1;
+                plot->setColor(c);
+                plots.push_back(plot);
+            }
         }
         void addCircle(Vector2f o, float r, float res=0.01, bool flip=false) {
             circles.push_back(Vector3f(o[0], o[1], flip?-r:r));
@@ -100,6 +112,35 @@ class Scene {
         }
         int numSurfels() const {
             return surfels.size()/4;
+        }
+
+        // --------- Managing Plots ---------
+        void drawPlots(int x, int y, int w, int h) {
+            std::vector<float> intensities, fullintensities, difference;
+            computeLighting(intensities);
+            computeLighting(fullintensities, true);
+            float maxintensity = 0;
+            for (int i = 0; i < intensities.size(); i++) {
+                maxintensity = std::max(maxintensity, intensities[i]);
+                difference.push_back(intensities[i] - fullintensities[i]);
+                maxintensity = std::max(maxintensity, difference[i]);
+            }
+            for (int i = 0; i < lines.size(); i++) {
+                plots[3*i+0]->updateData(
+                        fullintensities.data() + surfelIdx[i],
+                        surfelIdx[i+1] - surfelIdx[i]);
+                plots[3*i+1]->updateData(
+                        intensities.data() + surfelIdx[i],
+                        surfelIdx[i+1] - surfelIdx[i]);
+                plots[3*i+2]->updateData(
+                        difference.data() + surfelIdx[i],
+                        surfelIdx[i+1] - surfelIdx[i]);
+                for (int j = 0; j < 3; j++) {
+                    plots[3*i+j]->setViewport(x, y + i*h/lines.size(), w, h/lines.size());
+                    plots[3*i+j]->setYScale(0.9/maxintensity);
+                    plots[3*i+j]->draw();
+                }
+            }
         }
 
         // --------- CUDA Setup ---------
@@ -273,7 +314,8 @@ class Scene {
         // Optimization functions
         void getOptimizationArrays(double* opt_lightparams, double* opt_lightintensities, double* opt_geometry, double* opt_intensities)
         {
-            computeLighting();
+            std::vector<double> intensities;
+            computeLighting(intensities);
             memcpy(opt_intensities, intensities.data(), sizeof(double)*intensities.size());
             for (int i = 0, z = 0; i < lights.size(); i++) {
                 if (lights[i][2] < 0) {
@@ -294,16 +336,16 @@ class Scene {
                 }
             }
         }
-
-        void computeLighting() {
-            intensities.clear();
+        template<typename T>
+        void computeLighting(std::vector<T>& v, bool include_negative = false) {
+            v.clear();
             int dim = 2;
             for (int i = 0; i < surfels.size(); i += 2*dim) {
-                double tot = 0;
+                T tot = 0;
                 for (int j = 0; j < lights.size(); j++) {
-                    if (lights[j][dim] < 0) continue;
+                    if (!include_negative && lights[j][dim] < 0) continue;
                     // FIXME: non-point lights?
-                    double LdotL = 0;
+                    T LdotL = 0;
                     double ndotLn = 0;
                     for (int k = 0; k < dim; k++) {
                         double L = lights[j][k]-surfels[i+k];
@@ -313,7 +355,7 @@ class Scene {
                     ndotLn /= sqrt(LdotL);
                     tot += ndotLn>0?lights[j][dim]*ndotLn/LdotL:0;
                 }
-                intensities.push_back(tot);
+                v.push_back(tot);
             }
         }
         float computeError() {
@@ -388,9 +430,9 @@ class Scene {
 
         Vector2f minp, maxp;
 
-        vector<double> intensities;
         vector<float> surfels;
         vector<Line> lines;
+        vector<int> surfelIdx;
         vector<Vector3f> circles;
         int ncircles;
 
@@ -399,6 +441,8 @@ class Scene {
         vector<float> directions;
         vector<float> falloffs;
         vector<int> symmetries;
+
+        vector<GLPlot*> plots;
 
         Cudamap cm;
         float* field;
@@ -929,6 +973,7 @@ void draw() {
     draw2D();
     glViewport(displayscale*width,0,displayscale*width,displayscale*height);
     draw3D();
+    s.drawPlots(2*width*displayscale, 0, width*displayscale, height*displayscale);
     if (shouldWritePngFile) {
         glReadPixels(0,0,width*displayscale, height*displayscale, GL_RGB, GL_UNSIGNED_BYTE, (void*) imagedata);
         outputPNG(pngFilename.c_str(), imagedata, width*displayscale, height*displayscale);
@@ -973,7 +1018,7 @@ void draw() {
 void setupWindow(int argc, char** argv, int w, int h) {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
-    glutInitWindowSize(2*w, h);
+    glutInitWindowSize(3*w, h);
     glutCreateWindow("Light Localization");
     glutDisplayFunc(draw);
     glutIdleFunc(draw);

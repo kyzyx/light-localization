@@ -32,6 +32,7 @@ add_executable(visual
     opengl_compat.cpp opengl_compat.h
     fileio.cpp fileio.h
     trackball.cpp trackball.h
+    glplot.cpp glplot.h
     solveCeres.cpp solveCeres.h)
 target_link_libraries(visual cudamap cudaconvolution ${CUDA_LIBRARIES} ${OPENEXR_LIBRARIES} ${PNG_LIBRARIES}
     ${GLLIBS} ${CERES_LIBRARIES})
