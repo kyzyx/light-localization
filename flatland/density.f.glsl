@@ -8,17 +8,25 @@ uniform float exposure;
 uniform int threshold;
 uniform int maxidx;
 
-const int NUM_ADJ = 8;
-uniform vec2 adj[9] = vec2[9](
-    vec2(-1,-1),
-    vec2(-1,0),
-    vec2(-1,1),
-    vec2(0,1),
-    vec2(1,1),
-    vec2(1,0),
-    vec2(1,-1),
-    vec2(0,-1),
-    vec2(-1,-1)
+const int NUM_ADJ = 16;
+uniform vec2 adj[17] = vec2[17](
+    vec2(-2,-2),
+    vec2(-2,-1),
+    vec2(-2,0),
+    vec2(-2,1),
+    vec2(-2,2),
+    vec2(-1,2),
+    vec2( 0,2),
+    vec2( 1,2),
+    vec2( 2,2),
+    vec2( 2,1),
+    vec2( 2,0),
+    vec2( 2,-1),
+    vec2( 2,-2),
+    vec2( 1,-2),
+    vec2( 0,-2),
+    vec2(-1,-2),
+    vec2(-2,-2)
 );
 
 const int NUM_KELLY_COLORS = 20;

@@ -1082,7 +1082,7 @@ void setupProg(const char* fshader, int n) {
     glUniform1i(glGetUniformLocation(progs[n], "aux"), 1);
     glUniform2i(glGetUniformLocation(progs[n], "dim"), width, height);
     glUniform1f(glGetUniformLocation(progs[n], "exposure"), exposure);
-    glUniform1i(glGetUniformLocation(progs[n], "threshold"), 10);
+    glUniform1i(glGetUniformLocation(progs[n], "threshold"), 5);
 }
 
 void setupFullscreenQuad() {

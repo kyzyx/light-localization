@@ -8,6 +8,27 @@ uniform float exposure;
 uniform int threshold;
 uniform int maxidx;
 
+const int NUM_ADJ = 16;
+uniform vec2 adj[17] = vec2[17](
+    vec2(-2,-2),
+    vec2(-2,-1),
+    vec2(-2,0),
+    vec2(-2,1),
+    vec2(-2,2),
+    vec2(-1,2),
+    vec2( 0,2),
+    vec2( 1,2),
+    vec2( 2,2),
+    vec2( 2,1),
+    vec2( 2,0),
+    vec2( 2,-1),
+    vec2( 2,-2),
+    vec2( 1,-2),
+    vec2( 0,-2),
+    vec2(-1,-2),
+    vec2(-2,-2)
+);
+
 const int NUM_KELLY_COLORS = 20;
 uniform vec4 KellyColors[NUM_KELLY_COLORS] = vec4[NUM_KELLY_COLORS](
     vec4(255, 179, 0, 255)/255,
@@ -39,17 +60,14 @@ int cdist(int a, int b) {
 
 float medialaxis(vec2 st) {
     float a = 1.f/dim.x;
-    int v = floatBitsToInt(texture(buffer, st).y);
     float ret = 0;
-    ret += cdist(v, floatBitsToInt(texture(buffer, st+vec2(-a,-a)).y))>threshold?1.f:0.f;
-    ret += cdist(v, floatBitsToInt(texture(buffer, st+vec2(-a,0)).y))>threshold?1.f:0.f;
-    ret += cdist(v, floatBitsToInt(texture(buffer, st+vec2(-a,a)).y))>threshold?1.f:0.f;
-    ret += cdist(v, floatBitsToInt(texture(buffer, st+vec2(0,-a)).y))>threshold?1.f:0.f;
-    ret += cdist(v, floatBitsToInt(texture(buffer, st+vec2(0,0)).y))>threshold?1.f:0.f;
-    ret += cdist(v, floatBitsToInt(texture(buffer, st+vec2(0,a)).y))>threshold?1.f:0.f;
-    ret += cdist(v, floatBitsToInt(texture(buffer, st+vec2(a,-a)).y))>threshold?1.f:0.f;
-    ret += cdist(v, floatBitsToInt(texture(buffer, st+vec2(a,0)).y))>threshold?1.f:0.f;
-    ret += cdist(v, floatBitsToInt(texture(buffer, st+vec2(a,a)).y))>threshold?1.f:0.f;
+    int prev = floatBitsToInt(texture(buffer, st+a*adj[0]).y);
+    for (int i = 0; i < NUM_ADJ; i++) {
+        int curr = floatBitsToInt(texture(buffer, st+a*adj[i+1]).y);
+        int d = cdist(prev, curr);
+        ret += d>threshold?1.f:0.f;
+        prev = curr;
+    }
     return ret;
 }
 
