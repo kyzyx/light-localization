@@ -1165,6 +1165,38 @@ bool endswith(const string& s, string e) {
         return false;
 }
 
+void readScene(istream* in) {
+    int nsegs, nlights, type;
+    float x, y, z;
+    *in >> nsegs >> nlights;
+    cout << nsegs << " " << nlights << endl;
+    for (int i = 0; i < nsegs; i++) {
+        type = 0;
+        //*in >> type;
+        if (type == 0) {
+            *in >> x >> y;
+            Vector2f v1(x,y);
+            cout << x << " " << y << " ";
+            *in >> x >> y;
+            Vector2f v2(x,y);
+            s.addSegment(Line(v1,v2));
+            cout << x << " " << y << endl;
+        } else {
+            *in >> x >> y >> z;
+            s.addCircle(Vector2f(x,y),z);
+        }
+    }
+    s.initCuda(width, height);
+    s.setCudaGLTexture(tex);
+    s.setCudaGLBuffer(pbo);
+    for (int i = 0; i < nlights; i++) {
+        *in >> x >> y >> z;
+        cout << x << "  " << y << " " << z << endl;
+        s.addLight(x, y, z);
+    }
+    cout << "-----------" << endl;
+}
+
 int main(int argc, char** argv) {
     option::Stats stats(usage, argc-1, argv+1);
     option::Option options[stats.options_max], buffer[stats.buffer_max];
@@ -1231,30 +1263,9 @@ int main(int argc, char** argv) {
 
     if (options[INPUT_SCENEFILE]) {
         ifstream in(options[INPUT_SCENEFILE].arg);
-        int nsegs, nlights, type;
-        float x, y, z;
-        in >> nsegs >> nlights;
-        for (int i = 0; i < nsegs; i++) {
-            type = 0;
-            //in >> type;
-            if (type == 0) {
-                in >> x >> y;
-                Vector2f v1(x,y);
-                in >> x >> y;
-                Vector2f v2(x,y);
-                s.addSegment(Line(v1,v2));
-            } else {
-                in >> x >> y >> z;
-                s.addCircle(Vector2f(x,y),z);
-            }
-        }
-        s.initCuda(width, height);
-        s.setCudaGLTexture(tex);
-        s.setCudaGLBuffer(pbo);
-        for (int i = 0; i < nlights; i++) {
-            in >> x >> y >> z;
-            s.addLight(x, y, z);
-        }
+        readScene(&in);
+    } else if (options[INPUT_STDIN]) {
+        readScene(&cin);
     } else {
         s.addCircle(Vector2f(0,0), 1.0f, 0.007f);
         //s.addSegment(Line(Vector2f(-1, -1.01), Vector2f(-1, 1.01)));
