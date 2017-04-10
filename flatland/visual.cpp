@@ -284,6 +284,17 @@ class Scene {
                 }
             }
         }
+        void setFromOptimization(double* opt_lightparams, double* opt_lightintensities) {
+            for (int i = 0, z = 0; i < lights.size(); i++) {
+                if (lights[i][2] < 0) {
+                    lights[i][0] = opt_lightparams[2*z];
+                    lights[i][1] = opt_lightparams[2*z+1];
+                    lights[i][2] = -opt_lightintensities[z];
+                    z++;
+                }
+            }
+        }
+
         void computeLighting() {
             intensities.clear();
             int dim = 2;
@@ -818,7 +829,10 @@ bool updateEstimates() {
         double costj = solveCeres(geometry, intensities, s.numSurfels(), lightparams, lightintensities, nlightparams);
         cout << "Cost: " << costj << "(" << costi << ")"<< endl;
         if (costj < 1) {
-            cout << "Solution found" << endl;
+            s.setFromOptimization(lightparams, lightintensities);
+            for (int i = 0; i < nlightparams; i++) {
+                cout << i << ":" <<  lightparams[2*i] << " " << lightparams[2*i+1] << " " << lightintensities[i] << endl;
+            }
             return false;
         }
     }
@@ -929,9 +943,11 @@ void draw() {
         memset(imagecopy, 0, 3*ww*hh*sizeof(float));
 
         s.saveLights();
+        bool success = false;
         if (!updateEstimates()) {
-            cout << "Terminating: duplicated light" << endl;
+            cout << "Terminating: solution found" << endl;
             stepping = false;
+            success = true;
         }
         float err = s.computeError();
         if (err < 0.05) {
@@ -943,7 +959,7 @@ void draw() {
             stepping = false;
         }*/
         cout << err << endl;
-        if (!stepping) {
+        if (!stepping && !success) {
             s.restoreLights();
             err = prevErr;
         } else {
