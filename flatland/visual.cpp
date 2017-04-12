@@ -878,6 +878,22 @@ bool updateEstimates() {
                 cout << i << ":" <<  lightparams[2*i] << " " << lightparams[2*i+1] << " " << lightintensities[i] << endl;
             }
             return false;
+        } else {
+            for (int i = 0, z = 0; i < s.numLights(); i++) {
+                // If the light location hasn't changed too much, then the
+                // light estimate is still valuable even if the optimization failed.
+                // In particular, it can tell us if we've overshot.
+                if (s.getLight(i)[2] < 0) {
+                    Eigen::Vector2f optpos(lightparams[2*z], lightparams[2*z+1]);
+                    float d2 = (optpos - s.getLight(i).head(2)).squaredNorm();
+                    if (d2 < distancethreshold*distancethreshold) {
+                        if (lightintensities[z] < -s.getLight(i)[2]) {
+                            s.changeIntensity(i, -lightintensities[z]);
+                        }
+                    }
+                    z++;
+                }
+            }
         }
     }
     return true;
