@@ -29,6 +29,10 @@ unsigned char* medialaxis;
 float* imagecopy;
 float* distancefield;
 
+float randf() {
+    return rand()/(float)RAND_MAX;
+}
+
 using namespace std;
 using namespace Eigen;
 
@@ -59,10 +63,12 @@ string helpstring =
 
 class Scene {
     public:
-        Scene() : minp(Vector2f(0,0)), maxp(Vector2f(0,0)), ncircles(0) {
+        Scene() : minp(Vector2f(0,0)), maxp(Vector2f(0,0)), ncircles(0), noisescale(0) {
             surfelIdx.push_back(0);
         }
         ~Scene() { Cudamap_free(&cm); }
+
+        void setIntensityNoise(float scale) { noisescale = scale; }
 
         // --------- Geometry Manipulation ---------
         void addSegment(Line l, float res=0.01) {
@@ -170,6 +176,12 @@ class Scene {
                 circledata.push_back(circles[i][2]);
             }
             Cudamap_init(&cm, surfels.data(), linedata.data(), circledata.data());
+
+            noise.resize(numSurfels());
+            for (int i = 0; i < noise.size(); i++) {
+                noise[i] = 1 + noisescale*(2*randf()-1);
+            }
+            Cudamap_setNoise(&cm, noise.data());
         }
         void setCudaGLTexture(GLuint* tex) {
             Cudamap_setGLTexture(&cm, tex);
@@ -355,7 +367,7 @@ class Scene {
                     ndotLn /= sqrt(LdotL);
                     tot += ndotLn>0?lights[j][dim]*ndotLn/LdotL:0;
                 }
-                v.push_back(tot);
+                v.push_back(tot*noise[i/(2*dim)]);
             }
         }
         float computeError() {
@@ -377,7 +389,7 @@ class Scene {
                 if (residual < 0) {
                     return -1;
                 }
-                total += lighting>0?abs(residual/lighting):0;
+                total += lighting>0?abs(residual/(lighting*noise[i/4])):0;
                 n+=1;
             }
             return n>0?total/n:0;
@@ -441,6 +453,9 @@ class Scene {
         vector<float> directions;
         vector<float> falloffs;
         vector<int> symmetries;
+
+        float noisescale;
+        vector<float> noise;
 
         vector<GLPlot*> plots;
 
@@ -1275,6 +1290,9 @@ int main(int argc, char** argv) {
     currprog = 0;
     if (options[MODE]) {
         currprog = atoi(options[MODE].arg)%NUM_PROGS;
+    }
+    if (options[NOISE_INTENSITY]) {
+        s.setIntensityNoise(atof(options[NOISE_INTENSITY].arg));
     }
 
     if (options[INPUT_SCENEFILE]) {

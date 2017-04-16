@@ -15,7 +15,7 @@ enum optionIndex {
     PRINT_SUCCESS,
     //NOISE_NORMAL,
     //NOISE_GEO,
-    //NOISE_INTENSITY,
+    NOISE_INTENSITY
 };
 
 option::ArgStatus filename(const option::Option& opt, bool msg) {
@@ -33,6 +33,11 @@ option::ArgStatus integer(const option::Option& opt, bool msg) {
     }
 }
 
+option::ArgStatus real(const option::Option& opt, bool msg) {
+    if (atof(opt.arg) > 0) return option::ARG_OK;
+    else return option::ARG_ILLEGAL;
+}
+
 const option::Descriptor usage[] =
 {
     {UNKNOWN,          0, "",  "",          option::Arg::None, "Usage: visual [options]\n\n"
@@ -46,6 +51,7 @@ const option::Descriptor usage[] =
     {OUTPUT_IMAGEFILE, 0, "o", "imagefile", filename,          "  -o img.ppm, --imagefile img.ppm\t"},
     {OUTPUT_MESHFILE,  0, "",  "meshfile",  filename,          "  --meshfile mesh.ply            \t"},
     {PRINT_SUCCESS,    0, "",  "print-success",  option::Arg::None, "  --print-success                \t"},
+    {NOISE_INTENSITY,  0, "", "noise",      real,             "  --noise noiseamount\tPercent magnitude of intensity measurement noise"},
     {0,0,0,0,0,0}
 };
 #endif

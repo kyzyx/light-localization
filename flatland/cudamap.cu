@@ -164,6 +164,7 @@ __global__ void cuAddDirectionalLight(
 template <unsigned int blockSize>
 __global__ void cuCompute(
         float* intensities,
+        float* noise,
         float4* surfels,
         float4* line_occluders,
         int nlines,
@@ -196,6 +197,7 @@ __global__ void cuCompute(
     if (surfaceIdx < n) {
         // Data load
         float intensity = intensities[surfaceIdx];
+        float d = noise[surfaceIdx];
         float4 surfel = surfels[surfaceIdx];
 
         /*int ex = 32767*((surfel.x-minx)/(rangex*w));*/
@@ -212,7 +214,7 @@ __global__ void cuCompute(
         float2 A = make_float2(surfel.x + EPSILON*surfel.z, surfel.y + EPSILON*surfel.w);
         char occl = lineocclusion(shared_line_occluders, nlines*2,A,p)*
                     circleocclusion(shared_circle_occluders,ncircles,A,p);
-        float v = intensity*occl*ndotLn>0?intensity*LdotL/ndotLn:MAX_FLOAT;
+        float v = intensity*occl*ndotLn>0?d*intensity*LdotL/ndotLn:MAX_FLOAT;
         mini[tid].x = v>0.f?v:MAX_FLOAT;
     }
     __syncthreads();
@@ -315,6 +317,7 @@ float Gaussian(float x, float std) {
 void Cudamap_init(Cudamap* cudamap, float* surfels, float* line_occluders, float* circle_occluders) {
     cudaSetDevice(0);
     cudaMalloc((void**) &(cudamap->d_intensities), sizeof(float)*cudamap->n);
+    cudaMalloc((void**) &(cudamap->d_noise), sizeof(float)*cudamap->n);
     cudaMalloc((void**) &(cudamap->d_surfels), sizeof(float4)*cudamap->n);
     cudaMalloc((void**) &(cudamap->d_field), sizeof(float2)*cudamap->w*cudamap->h);
     cudaMalloc((void**) &(cudamap->d_density), sizeof(float)*cudamap->w*cudamap->h);
@@ -327,6 +330,7 @@ void Cudamap_init(Cudamap* cudamap, float* surfels, float* line_occluders, float
     if (cudamap->nlines) cudaMemcpy(cudamap->d_line_occluders, line_occluders, sizeof(float4)*cudamap->nlines, cudaMemcpyHostToDevice);
     if (cudamap->ncircles) cudaMemcpy(cudamap->d_circle_occluders, circle_occluders, sizeof(float4)*cudamap->ncircles, cudaMemcpyHostToDevice);
     cudaMemset((void*) cudamap->d_intensities, 0, sizeof(float)*cudamap->n);
+    cudaMemset((void*) cudamap->d_noise, 0, sizeof(float)*cudamap->n);
 
     float kernel[KERNEL_LENGTH];
     float tot = 0;
@@ -383,6 +387,7 @@ void Cudamap_free(Cudamap* cudamap) {
     cudaFree(cudamap->d_buffer);
     cudaFree(cudamap->d_tmp);
     cudaFree(cudamap->d_intensities);
+    cudaFree(cudamap->d_noise);
     cudaFree(cudamap->d_field);
 }
 
@@ -391,6 +396,13 @@ void Cudamap_setIntensities(Cudamap* cudamap, float* intensities) {
         cudaMemcpy(cudamap->d_intensities, intensities, sizeof(float)*cudamap->n, cudaMemcpyHostToDevice);
     } else {
         cudaMemset((void*) cudamap->d_intensities, 0, sizeof(float)*cudamap->n);
+    }
+}
+void Cudamap_setNoise(Cudamap* cudamap, float* noise) {
+    if (noise) {
+        cudaMemcpy(cudamap->d_noise, noise, sizeof(float)*cudamap->n, cudaMemcpyHostToDevice);
+    } else {
+        cudaMemset((void*) cudamap->d_noise, 0, sizeof(float)*cudamap->n);
     }
 }
 
@@ -432,6 +444,7 @@ void Cudamap_computeField(Cudamap* cudamap, float* field)
     float rangey = (cudamap->maxy-cudamap->miny)/((float)h-2);
     cuCompute<BLOCK_SIZE><<< blocks, threads >>>(
             cudamap->d_intensities,
+            cudamap->d_noise,
             cudamap->d_surfels,
             cudamap->d_line_occluders,
             cudamap->nlines,
