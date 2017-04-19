@@ -171,7 +171,7 @@ __global__ void cuCompute(
         float4* circle_occluders,
         int ncircles,
         int n,
-        float2* field,
+        float4* field,
         int w, int h,
         float rangex, float rangey, float minx, float miny
         )
@@ -259,23 +259,23 @@ __global__ void cuCompute(
 
     // Final data copy
     if (tid == 0) {
-        atomicMin2(field+blockIdx.z*w+blockIdx.y, mini[0]);
+        atomicMin2((float2*) &(field[blockIdx.z*w+blockIdx.y]), mini[0]);
     }
 }
 
 const int NUM_ADJ = 17;
 __constant__ int adjx[NUM_ADJ] = {-2,-2,-2,-2,-2,-1, 0, 1, 2, 2, 2, 2, 2, 1, 0,-1,-2};
 __constant__ int adjy[NUM_ADJ] = {-2,-1, 0, 1, 2, 2, 2, 2, 2, 1, 0,-1,-2,-2,-2,-2,-2};
-#define LOADDATA(a,x,y,w,h) (((x)<(w))&&((y)<(h)))?a[(y)*w+(x)]:make_float2(0,0)
+#define LOADDATA(a,x,y,w,h) (((x)<(w))&&((y)<(h)))?a[(y)*w+(x)]:make_float4(0,0,0,0)
 
 __global__ void cuComputeDensity(
-        float2* field,
+        float4* field,
         float* density,
         int n, int w, int h,
         float threshold
 )
 {
-    __shared__ float2 data[32][32];
+    __shared__ float4 data[32][32];
     int tx = threadIdx.x;
     int ty = threadIdx.y;
     int x = threadIdx.x + blockDim.x*blockIdx.x;
@@ -319,7 +319,7 @@ void Cudamap_init(Cudamap* cudamap, float* surfels, float* line_occluders, float
     cudaMalloc((void**) &(cudamap->d_intensities), sizeof(float)*cudamap->n);
     cudaMalloc((void**) &(cudamap->d_noise), sizeof(float)*cudamap->n);
     cudaMalloc((void**) &(cudamap->d_surfels), sizeof(float4)*cudamap->n);
-    cudaMalloc((void**) &(cudamap->d_field), sizeof(float2)*cudamap->w*cudamap->h);
+    cudaMalloc((void**) &(cudamap->d_field), sizeof(float4)*cudamap->w*cudamap->h);
     cudaMalloc((void**) &(cudamap->d_density), sizeof(float)*cudamap->w*cudamap->h);
     cudaMalloc((void**) &(cudamap->d_buffer), sizeof(float)*cudamap->w*cudamap->h);
     cudaMalloc((void**) &(cudamap->d_tmp), sizeof(float)*cudamap->w*cudamap->h);
@@ -432,10 +432,12 @@ void Cudamap_computeField(Cudamap* cudamap, float* field)
     if (running) return;
     running = 1;
     for (int i = 0; i < w*h; i++) {
-        field[2*i] = MAX_FLOAT;
-        field[2*i+1] = 0;
+        field[4*i] = MAX_FLOAT;
+        field[4*i+1] = 0;
+        field[4*i+2] = 0;
+        field[4*i+3] = 0;
     }
-    cudaMemcpy(cudamap->d_field, field, sizeof(float2)*w*h, cudaMemcpyHostToDevice);
+    cudaMemcpy(cudamap->d_field, field, sizeof(float4)*w*h, cudaMemcpyHostToDevice);
 
     dim3 threads(BLOCK_SIZE, 1, 1);
     dim3 blocks((n+BLOCK_SIZE-1)/BLOCK_SIZE, w, h);
@@ -455,9 +457,9 @@ void Cudamap_computeField(Cudamap* cudamap, float* field)
             );
 
     if (cudamap->d_field_tex) {
-        cudaMemcpyToArray(cudamap->d_field_tex, 0, 0, cudamap->d_field, sizeof(float2)*w*h, cudaMemcpyDeviceToDevice);
+        cudaMemcpyToArray(cudamap->d_field_tex, 0, 0, cudamap->d_field, sizeof(float4)*w*h, cudaMemcpyDeviceToDevice);
     }
-    cudaMemcpy(field, cudamap->d_field, sizeof(float2)*w*h, cudaMemcpyDeviceToHost);
+    cudaMemcpy(field, cudamap->d_field, sizeof(float4)*w*h, cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize();
     running = 0;
 }

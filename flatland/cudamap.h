@@ -10,7 +10,7 @@ typedef struct {
     float4* d_surfels;
     float4* d_line_occluders;
     float4* d_circle_occluders;
-    float2* d_field;
+    float4* d_field;
     float* d_buffer;
     float* d_tmp;
     float* d_density;
