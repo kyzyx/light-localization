@@ -6,6 +6,12 @@
 #define BLOCK_SIZE 512
 #define MAX_FLOAT 1e9
 
+__host__ __device__ int cdist(int a, int b, int maxidx) {
+    int d = abs(b-a);
+    d = d>maxidx/2?maxidx-d:d;
+    return b>a?d:-d;
+}
+
 inline __host__ __device__ float2 normalize(float2 a) {
     float l = sqrt(a.x*a.x + a.y*a.y);
     return make_float2(a.x/l, a.y/l);
@@ -162,6 +168,139 @@ __global__ void cuAddDirectionalLight(
 }
 
 template <unsigned int blockSize>
+__global__ void cuGetRanges(
+        float* intensities,
+        float* noise,
+        float4* surfels,
+        float4* line_occluders,
+        int nlines,
+        float4* circle_occluders,
+        int ncircles,
+        int n,
+        float4* field,
+        float noisemag,
+        int w, int h,
+        float rangex, float rangey, float minx, float miny
+        )
+{
+    __shared__ float4 val;
+    __shared__ int2 ranges[BLOCK_SIZE];
+    __shared__ float2 shared_line_occluders[64];
+    __shared__ float4 shared_circle_occluders[32];
+
+    int tid = threadIdx.x;
+    int surfaceIdx = tid + blockDim.x*blockIdx.x;
+    ranges[tid] = make_int2(0, 0);
+
+    if (tid == 0) {
+        val = field[blockIdx.z*w+blockIdx.y];
+    }
+    if (tid < nlines) {
+        float4 line = line_occluders[tid];
+        shared_line_occluders[2*tid] = make_float2(line.x, line.y);
+        shared_line_occluders[2*tid+1] = make_float2(line.z, line.w);
+    }
+    if (tid < ncircles) {
+        shared_circle_occluders[tid] = circle_occluders[tid];
+    }
+    __syncthreads();
+
+    if (surfaceIdx < n) {
+        // Data load
+        float intensity = intensities[surfaceIdx];
+        float d = noise[surfaceIdx];
+        float4 surfel = surfels[surfaceIdx];
+
+        // Computation
+        float2 p = make_float2(rangex*blockIdx.y + minx, rangey*blockIdx.z + miny);
+        float Lx = p.x - surfel.x;
+        float Ly = p.y - surfel.y;
+        float LdotL = Lx*Lx + Ly*Ly;
+        float ndotLn = (surfel.z*Lx + surfel.w*Ly)/sqrt(LdotL);
+        float2 A = make_float2(surfel.x + EPSILON*surfel.z, surfel.y + EPSILON*surfel.w);
+        char occl = lineocclusion(shared_line_occluders, nlines*2,A,p)*
+                    circleocclusion(shared_circle_occluders,ncircles,A,p);
+        float v = intensity*occl*ndotLn>0?d*intensity*LdotL/ndotLn:MAX_FLOAT;
+        float q = val.x == MAX_FLOAT?0:2*noisemag*val.x/(1-noisemag) - (v-val.x);
+        int delta = cdist(__float_as_int(val.y), surfaceIdx, n);
+        ranges[tid].x = q>0?delta:0;
+        ranges[tid].y = q>0?delta:0;
+    }
+    __syncthreads();
+
+    // Reduction
+    if (blockSize >= 512) {
+        if (tid < 256) {
+            ranges[tid].x = min(ranges[tid].x, ranges[tid+256].x);
+            ranges[tid].y = max(ranges[tid].y, ranges[tid+256].y);
+        }
+        __syncthreads(); 
+    }
+    if (blockSize >= 256) {
+        if (tid < 128) {
+            ranges[tid].x = min(ranges[tid].x, ranges[tid+128].x);
+            ranges[tid].y = max(ranges[tid].y, ranges[tid+128].y);
+        }
+        __syncthreads(); 
+    }
+    if (blockSize >= 128) {
+        if (tid < 64)  {
+            ranges[tid].x = min(ranges[tid].x, ranges[tid+64].x);
+            ranges[tid].y = max(ranges[tid].y, ranges[tid+64].y);
+        }
+        __syncthreads(); 
+    }
+    if (blockSize >= 64)  {
+        if (tid < 32)  {
+            ranges[tid].x = min(ranges[tid].x, ranges[tid+32].x);
+            ranges[tid].y = max(ranges[tid].y, ranges[tid+32].y);
+        }
+        __syncthreads(); 
+    }
+    if (blockSize >= 32)  {
+        if (tid < 16)  {
+            ranges[tid].x = min(ranges[tid].x, ranges[tid+16].x);
+            ranges[tid].y = max(ranges[tid].y, ranges[tid+16].y);
+        }
+        __syncthreads(); 
+    }
+    if (blockSize >= 16)  {
+        if (tid < 8)   {
+            ranges[tid].x = min(ranges[tid].x, ranges[tid+8].x);
+            ranges[tid].y = max(ranges[tid].y, ranges[tid+8].y);
+        }
+        __syncthreads(); 
+    }
+    if (blockSize >= 8)   {
+        if (tid < 4)   {
+            ranges[tid].x = min(ranges[tid].x, ranges[tid+4].x);
+            ranges[tid].y = max(ranges[tid].y, ranges[tid+4].y);
+        }
+        __syncthreads(); 
+    }
+    if (blockSize >= 4)   {
+        if (tid < 2)   {
+            ranges[tid].x = min(ranges[tid].x, ranges[tid+2].x);
+            ranges[tid].y = max(ranges[tid].y, ranges[tid+2].y);
+        }
+        __syncthreads(); 
+    }
+    if (blockSize >= 2)   {
+        if (tid < 1)   {
+            ranges[tid].x = min(ranges[tid].x, ranges[tid+1].x);
+            ranges[tid].y = max(ranges[tid].y, ranges[tid+1].y);
+        }
+        __syncthreads(); 
+    }
+
+    // Final data copy
+    if (tid == 0) {
+        atomicMin((int*) &(field[blockIdx.z*w+blockIdx.y].z), ranges[0].x);
+        atomicMax((int*) &(field[blockIdx.z*w+blockIdx.y].w), ranges[0].y);
+    }
+}
+
+template <unsigned int blockSize>
 __global__ void cuCompute(
         float* intensities,
         float* noise,
@@ -295,10 +434,18 @@ __global__ void cuComputeDensity(
         ty += 8;
         float ret = 0;
         int count = 0;
-        int prev = __float_as_int(data[ty+adjy[0]][tx+adjx[0]].y);
+        float4 prev = data[ty+adjy[0]][tx+adjx[0]];
         for (int i = 1; i < NUM_ADJ; i++) {
-            int curr = __float_as_int(data[ty+adjy[i]][tx+adjx[i]].y);
-            int d = abs(prev-curr);
+            float4 curr = data[ty+adjy[i]][tx+adjx[i]];
+            int a = __float_as_int(prev.y);
+            int ahi = __float_as_int(prev.w);
+            int alo = __float_as_int(prev.z);
+            int b = __float_as_int(curr.y);
+            int bhi = __float_as_int(curr.w);
+            int blo = __float_as_int(curr.z);
+            int a1 = max(a+ahi, b+bhi);
+            int b1 = min(a+alo, b+blo);
+            int d = abs(a1-b1);
             d = d>n/2?n-d:d;
             if (d < threshold) {
                 ret += d;
@@ -422,7 +569,7 @@ void Cudamap_addDirectionalLight(Cudamap* cudamap, float intensity, float x, flo
             intensity, x, y, fx/d, fy/d, d, cudamap->n);
 }
 
-void Cudamap_computeField(Cudamap* cudamap, float* field)
+void Cudamap_computeField(Cudamap* cudamap, float* field, float noisetolerance)
 {
     static int running = 0;
     int n = cudamap->n;
@@ -453,6 +600,18 @@ void Cudamap_computeField(Cudamap* cudamap, float* field)
             cudamap->d_circle_occluders,
             cudamap->ncircles,
             n, cudamap->d_field, w, h,
+            rangex, rangey, cudamap->minx, cudamap->miny
+            );
+
+    cuGetRanges<BLOCK_SIZE><<< blocks, threads >>>(
+            cudamap->d_intensities,
+            cudamap->d_noise,
+            cudamap->d_surfels,
+            cudamap->d_line_occluders,
+            cudamap->nlines,
+            cudamap->d_circle_occluders,
+            cudamap->ncircles,
+            n, cudamap->d_field, noisetolerance, w, h,
             rangex, rangey, cudamap->minx, cudamap->miny
             );
 

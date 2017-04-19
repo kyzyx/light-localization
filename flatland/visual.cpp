@@ -190,10 +190,10 @@ class Scene {
             Cudamap_setGLBuffer(&cm, pbo);
         }
         void computeField(float* distancefield=NULL) {
-            Cudamap_computeField(&cm, distancefield?distancefield:field);
+            Cudamap_computeField(&cm, distancefield?distancefield:field, noisescale);
         }
         void computeDensity(float* density=NULL) {
-            Cudamap_computeDensity(&cm, density?density:field);
+            Cudamap_computeDensity(&cm, density?density:field, 35); // FIXME
         }
 
         // --------- Light Manipulation ---------
@@ -599,9 +599,9 @@ void keydown(unsigned char key, int x, int y) {
     } else if (key == '.') {
         exposure += 0.05;
     } else if (key == 'z') {
-        if (heightexposure > 0.05) heightexposure -= 0.05;
+        if (heightexposure > 0.01) heightexposure -= 0.01;
     } else if (key == 'x') {
-        heightexposure += 0.05;
+        heightexposure += 0.01;
     } else if (key == 'm') {
         currprog = (currprog+1)%NUM_PROGS;
     } else if (key == ' ') {

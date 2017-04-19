@@ -34,6 +34,6 @@ extern "C" void Cudamap_setIntensities(Cudamap* cudamap, float* intensities);
 extern "C" void Cudamap_setNoise(Cudamap* cudamap, float* noise);
 extern "C" void Cudamap_addLight(Cudamap* cudamap, float intensity, float x, float y);
 extern "C" void Cudamap_addDirectionalLight(Cudamap* cudamap, float intensity, float x, float y, float fx, float fy);
-extern "C" void Cudamap_computeField(Cudamap* cudamap, float* field);
+extern "C" void Cudamap_computeField(Cudamap* cudamap, float* field, float noisetolerance=0.01);
 extern "C" void Cudamap_computeDensity(Cudamap* cudamap, float* density, float threshold=5);
 #endif
