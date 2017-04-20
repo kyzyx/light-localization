@@ -8,6 +8,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <ceres/ceres.h>
 
+#include "filter.h"
 #include "loadshader.h"
 #include "geometry.h"
 #include "glplot.h"
@@ -193,6 +194,9 @@ class Scene {
             Cudamap_setGLBuffer(&cm, pbo);
         }
         void computeField(float* distancefield=NULL) {
+            vector<float> intensities;
+            computeLighting(intensities, true);
+            Cudamap_setIntensities(&cm, intensities.data());
             Cudamap_computeField(&cm, distancefield?distancefield:field, noisescale);
         }
         void computeDensity(float* density=NULL) {
@@ -352,7 +356,8 @@ class Scene {
             }
         }
         template<typename T>
-        void computeLighting(std::vector<T>& v, bool include_negative = false) {
+        void computeLighting(std::vector<T>& intensities, bool include_negative = false) {
+            std::vector<T> v;
             v.clear();
             int dim = 2;
             for (int i = 0; i < surfels.size(); i += 2*dim) {
@@ -372,6 +377,8 @@ class Scene {
                 }
                 v.push_back(tot*noise[i/(2*dim)]);
             }
+            GaussianFilter1D(v, intensities, (T)3.f);
+
         }
         float computeError() {
             float total = 0;
