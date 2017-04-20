@@ -63,12 +63,15 @@ string helpstring =
 
 class Scene {
     public:
-        Scene() : minp(Vector2f(0,0)), maxp(Vector2f(0,0)), ncircles(0), noisescale(0) {
+        Scene() : minp(Vector2f(0,0)), maxp(Vector2f(0,0)), ncircles(0), noisescale(0), densitythreshold(10) {
             surfelIdx.push_back(0);
         }
         ~Scene() { Cudamap_free(&cm); }
 
         void setIntensityNoise(float scale) { noisescale = scale; }
+        float getIntensityNoise() const { return noisescale; }
+        void setDensityThreshold(int threshold) { densitythreshold = threshold; }
+        int getDensityThreshold() const { return densitythreshold; }
 
         // --------- Geometry Manipulation ---------
         void addSegment(Line l, float res=0.01) {
@@ -193,7 +196,7 @@ class Scene {
             Cudamap_computeField(&cm, distancefield?distancefield:field, noisescale);
         }
         void computeDensity(float* density=NULL) {
-            Cudamap_computeDensity(&cm, density?density:field, 35); // FIXME
+            Cudamap_computeDensity(&cm, density?density:field, densitythreshold);
         }
 
         // --------- Light Manipulation ---------
@@ -455,6 +458,7 @@ class Scene {
         vector<int> symmetries;
 
         float noisescale;
+        int densitythreshold;
         vector<float> noise;
 
         vector<GLPlot*> plots;
@@ -602,6 +606,26 @@ void keydown(unsigned char key, int x, int y) {
         if (heightexposure > 0.01) heightexposure -= 0.01;
     } else if (key == 'x') {
         heightexposure += 0.01;
+    } else if (key == '1') {
+        float n = s.getIntensityNoise();
+        if (n > 0.001) {
+            s.setIntensityNoise(n - 0.001);
+            std::cout << "Set noise to " << (n-0.001) << std::endl;
+        }
+    } else if (key == '2') {
+        float n = s.getIntensityNoise();
+        s.setIntensityNoise(n + 0.001);
+        std::cout << "Set noise to " << (n+0.001) << std::endl;
+    } else if (key == '3') {
+        int n = s.getDensityThreshold();
+        if (n > 1) {
+            s.setDensityThreshold(n - 1);
+            std::cout << "Set density threshold to " << (n-1) << std::endl;
+        }
+    } else if (key == '4') {
+        int n = s.getDensityThreshold();
+        s.setDensityThreshold(n + 1);
+        std::cout << "Set density threshold to " << (n+1) << std::endl;
     } else if (key == 'm') {
         currprog = (currprog+1)%NUM_PROGS;
     } else if (key == ' ') {
