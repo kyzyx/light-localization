@@ -64,11 +64,13 @@ string helpstring =
 
 class Scene {
     public:
-        Scene() : minp(Vector2f(0,0)), maxp(Vector2f(0,0)), ncircles(0), noisescale(0), densitythreshold(10) {
+        Scene() : minp(Vector2f(0,0)), maxp(Vector2f(0,0)), ncircles(0), noisescale(0), densitythreshold(10), filter(false) {
             surfelIdx.push_back(0);
         }
         ~Scene() { Cudamap_free(&cm); }
 
+        void setFilter(bool dofilter) { filter = dofilter; }
+        void toggleFilter() { filter = !filter; }
         void setIntensityNoise(float scale) { noisescale = scale; }
         float getIntensityNoise() const { return noisescale; }
         void setDensityThreshold(int threshold) { densitythreshold = threshold; }
@@ -334,7 +336,10 @@ class Scene {
         void getOptimizationArrays(double* opt_lightparams, double* opt_lightintensities, double* opt_geometry, double* opt_intensities)
         {
             std::vector<double> intensities;
+            bool tmp = filter;
+            filter = false;
             computeLighting(intensities);
+            filter = tmp;
             memcpy(opt_intensities, intensities.data(), sizeof(double)*intensities.size());
             for (int i = 0, z = 0; i < lights.size(); i++) {
                 if (lights[i][2] < 0) {
@@ -377,8 +382,8 @@ class Scene {
                 }
                 v.push_back(tot*noise[i/(2*dim)]);
             }
-            GaussianFilter1D(v, intensities, (T)3.f);
-
+            if (filter) GaussianFilter1D(v, intensities, (T)3.f);
+            else swap(intensities, v);
         }
         float computeError() {
             float total = 0;
@@ -464,6 +469,7 @@ class Scene {
         vector<float> falloffs;
         vector<int> symmetries;
 
+        bool filter;
         float noisescale;
         int densitythreshold;
         vector<float> noise;
@@ -633,6 +639,8 @@ void keydown(unsigned char key, int x, int y) {
         int n = s.getDensityThreshold();
         s.setDensityThreshold(n + 1);
         std::cout << "Set density threshold to " << (n+1) << std::endl;
+    } else if (key == '`') {
+        s.toggleFilter();
     } else if (key == 'm') {
         currprog = (currprog+1)%NUM_PROGS;
     } else if (key == ' ') {
@@ -979,6 +987,7 @@ void draw2D() {
     glUseProgram(progs[currprog]);
     if (currprog == PROG_SOURCEMAP || currprog == PROG_MEDIALAXIS || currprog == PROG_DENSITY) {
         glUniform1i(glGetUniformLocation(progs[currprog], "maxidx"), s.numSurfels());
+        glUniform1i(glGetUniformLocation(progs[currprog], "threshold"), s.getDensityThreshold());
     }
     glUniform1f(glGetUniformLocation(progs[currprog], "exposure"), exposure);
     glActiveTexture(GL_TEXTURE1);
@@ -1145,7 +1154,7 @@ void setupProg(const char* fshader, int n) {
     glUniform1i(glGetUniformLocation(progs[n], "aux"), 1);
     glUniform2i(glGetUniformLocation(progs[n], "dim"), width, height);
     glUniform1f(glGetUniformLocation(progs[n], "exposure"), exposure);
-    glUniform1i(glGetUniformLocation(progs[n], "threshold"), 5);
+    glUniform1i(glGetUniformLocation(progs[n], "threshold"), 10);
 }
 
 void setupFullscreenQuad() {
