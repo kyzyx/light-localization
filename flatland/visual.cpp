@@ -29,9 +29,16 @@ unsigned char* imagedata;
 unsigned char* medialaxis;
 float* imagecopy;
 float* distancefield;
+std::default_random_engine gen;
+std::uniform_real_distribution<float> df(0,1);
 
 float randf() {
-    return rand()/(float)RAND_MAX;
+    return df(gen);
+}
+
+float randfNorm(float x=0, float std=1) {
+    std::normal_distribution<> dn(x,std);
+    return dn(gen);
 }
 
 using namespace std;
@@ -185,7 +192,7 @@ class Scene {
 
             noise.resize(numSurfels());
             for (int i = 0; i < noise.size(); i++) {
-                noise[i] = 1 + noisescale*(2*randf()-1);
+                noise[i] = randfNorm(1, noisescale);
             }
             Cudamap_setNoise(&cm, noise.data());
         }
