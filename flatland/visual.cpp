@@ -648,9 +648,8 @@ void keydown(unsigned char key, int x, int y) {
     } else if (key == '.') {
         exposure += 0.05;
     } else if (key == 'z') {
-        if (heightexposure > 0.05) heightexposure -= 0.05;
+        if (heightexposure > 0.01) heightexposure -= 0.01;
     } else if (key == 'x') {
-<<<<<<< HEAD
         heightexposure += 0.01;
     } else if (key == '1') {
         float n = s.getIntensityNoise();
@@ -674,9 +673,6 @@ void keydown(unsigned char key, int x, int y) {
         std::cout << "Set density threshold to " << (n+1) << std::endl;
     } else if (key == '`') {
         s.toggleFilter();
-=======
-        heightexposure += 0.05;
->>>>>>> parent of 553e9ce... Add ranges to density computation
     } else if (key == 'm') {
         currprog = (currprog+1)%NUM_PROGS;
     } else if (key == ' ') {
@@ -824,14 +820,14 @@ void highlightRanges(int x, int y) {
     int xx = clamp(x+adjx[0], 0, width);
     int yy = clamp(y+adjy[0], 0, height);
     int idx = yy*width+xx;
-    int prev = __float_as_int(distancefield[4*idx+1]);
+    int prev = __float_as_int(distancefield[2*idx+1]);
     int ret = 0;
     int count = 0;
     for (int i = 0; i < NUM_ADJ; i++) {
         xx = clamp(x+adjx[i], 0, width);
         yy = clamp(y+adjy[i], 0, height);
         idx = yy*width+xx;
-        int curr = __float_as_int(distancefield[4*idx+1]);
+        int curr = __float_as_int(distancefield[2*idx+1]);
         int d = cdist(prev, curr);
             cout << d << " ";
         if (d < s.getDensityThreshold()) {
