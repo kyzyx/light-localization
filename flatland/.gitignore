@@ -7,3 +7,6 @@ visual
 *.exr
 *.lt
 .*.swp
+
+adj.gen.h
+density.f.glsl

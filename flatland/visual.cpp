@@ -32,6 +32,13 @@ float* distancefield;
 std::default_random_engine gen;
 std::uniform_real_distribution<float> df(0,1);
 
+inline float clamp(float a, float lo, float hi) {
+    return std::max(std::min(a, hi), lo);
+}
+int __float_as_int(float f) {
+    int* i = reinterpret_cast<int*>(&f);
+    return *i;
+}
 float randf() {
     return df(gen);
 }
@@ -135,18 +142,17 @@ class Scene {
 
         // --------- Managing Plots ---------
         void drawPlots(int x, int y, int w, int h) {
-            std::vector<float> intensities, fullintensities, difference;
-            computeLighting(intensities);
-            computeLighting(fullintensities, true);
+            std::vector<float> intensities, difference;
+            computeLighting(intensities, true);
             float maxintensity = 0;
             for (int i = 0; i < intensities.size(); i++) {
                 maxintensity = std::max(maxintensity, intensities[i]);
-                difference.push_back(intensities[i] - fullintensities[i]);
+                difference.push_back(intensities[i] - currintensities[i]);
                 maxintensity = std::max(maxintensity, difference[i]);
             }
             for (int i = 0; i < lines.size(); i++) {
                 plots[3*i+0]->updateData(
-                        fullintensities.data() + surfelIdx[i],
+                        currintensities.data() + surfelIdx[i],
                         surfelIdx[i+1] - surfelIdx[i]);
                 plots[3*i+1]->updateData(
                         intensities.data() + surfelIdx[i],
@@ -203,10 +209,9 @@ class Scene {
             Cudamap_setGLBuffer(&cm, pbo);
         }
         void computeField(float* distancefield=NULL) {
-            vector<float> intensities;
-            computeLighting(intensities, true);
-            Cudamap_setIntensities(&cm, intensities.data());
-            Cudamap_computeField(&cm, distancefield?distancefield:field, noisescale);
+            computeLighting(currintensities, true);
+            Cudamap_setIntensities(&cm, currintensities.data());
+            Cudamap_computeField(&cm, distancefield?distancefield:field, 0);
         }
         void computeDensity(float* density=NULL) {
             Cudamap_computeDensity(&cm, density?density:field, densitythreshold);
@@ -367,27 +372,45 @@ class Scene {
                 }
             }
         }
+        double lightAt(int i, Vector2f p) {
+            int dim = 2;
+            double LdotL = 0;
+            double ndotLn = 0;
+            for (int k = 0; k < dim; k++) {
+                double L = p[k]-surfels[2*dim*i+k];
+                ndotLn += surfels[2*dim*i+dim+k]*L;
+                LdotL += L*L;
+            }
+            ndotLn /= sqrt(LdotL);
+            if (ndotLn > 0) return currintensities[i]*LdotL/ndotLn;
+            else return 0;
+        }
+
+        double lightingAt(int i, bool include_negative = false) {
+            int dim = 2;
+            double tot = 0;
+            for (int j = 0; j < lights.size(); j++) {
+                if (!include_negative && lights[j][dim] < 0) continue;
+                // FIXME: non-point lights?
+                double LdotL = 0;
+                double ndotLn = 0;
+                for (int k = 0; k < dim; k++) {
+                    double L = lights[j][k]-surfels[2*dim*i+k];
+                    ndotLn += surfels[2*dim*i+dim+k]*L;
+                    LdotL += L*L;
+                }
+                ndotLn /= sqrt(LdotL);
+                tot += ndotLn>0?lights[j][dim]*ndotLn/LdotL:0;
+            }
+            return tot;
+        }
         template<typename T>
         void computeLighting(std::vector<T>& intensities, bool include_negative = false) {
             std::vector<T> v;
             v.clear();
-            int dim = 2;
-            for (int i = 0; i < surfels.size(); i += 2*dim) {
-                T tot = 0;
-                for (int j = 0; j < lights.size(); j++) {
-                    if (!include_negative && lights[j][dim] < 0) continue;
-                    // FIXME: non-point lights?
-                    T LdotL = 0;
-                    double ndotLn = 0;
-                    for (int k = 0; k < dim; k++) {
-                        double L = lights[j][k]-surfels[i+k];
-                        ndotLn += surfels[i+dim+k]*L;
-                        LdotL += L*L;
-                    }
-                    ndotLn /= sqrt(LdotL);
-                    tot += ndotLn>0?lights[j][dim]*ndotLn/LdotL:0;
-                }
-                v.push_back(tot*noise[i/(2*dim)]);
+            for (int i = 0; i < numSurfels(); i++) {
+                T tot = lightingAt(i, include_negative);
+                v.push_back(tot*noise[i]);
             }
             if (filter) GaussianFilter1D(v, intensities, (T)3.f);
             else swap(intensities, v);
@@ -474,6 +497,7 @@ class Scene {
         vector<Vector3f> savedLights;
         vector<float> directions;
         vector<float> falloffs;
+        vector<float> currintensities;
         vector<int> symmetries;
 
         bool filter;
@@ -765,12 +789,79 @@ void click2d(int button, int state, int x, int y) {
         dragging = 0;
     }
 }
+
+int cdist(int a, int b) {
+    int d = std::abs(a-b);
+    int maxidx = s.numSurfels();
+    return d>maxidx/2?maxidx-d:d;
+}
+
+#define __constant__ const
+#include "adj.gen.h"
+
+void highlightSurfelRange(int a, int b) {
+    int xx, yy;
+    for (int i = a; i <= b; i++) {
+        Vector2f pp;
+        pp[0] = s.getSurfel(4*i);
+        pp[1] = s.getSurfel(4*i+1);
+        s.world2clip(pp, xx, yy, width*displayscale, height*displayscale);
+        int sidx = yy*width*displayscale+xx;
+        auxlayer[sidx] = 0.5;
+    }
+}
+void highlightRanges(int x, int y) {
+    rerasterizeLights();
+    auxlayer[y*width*displayscale+x] = 0.5;
+
+    Vector2f p = s.clip2world(x,y,width*displayscale,height*displayscale);
+    s.world2clip(p, x, y, width, height);
+    int xx = clamp(x+adjx[0], 0, width);
+    int yy = clamp(y+adjy[0], 0, height);
+    int idx = yy*width+xx;
+    int prev = __float_as_int(distancefield[4*idx+1]);
+    int ret = 0;
+    int count = 0;
+    for (int i = 0; i < NUM_ADJ; i++) {
+        xx = clamp(x+adjx[i], 0, width);
+        yy = clamp(y+adjy[i], 0, height);
+        idx = yy*width+xx;
+        int curr = __float_as_int(distancefield[4*idx+1]);
+        int d = cdist(prev, curr);
+            cout << d << " ";
+        if (d < s.getDensityThreshold()) {
+            ret+=d;
+            count++;
+            int a = std::min(prev, curr);
+            int b = prev+curr-a;
+            if (std::abs(prev-curr) > s.numSurfels()/2) {
+                highlightSurfelRange(0, a);
+                highlightSurfelRange(b, s.numSurfels()-1);
+            } else {
+                highlightSurfelRange(a,b);
+            }
+        }
+        prev = curr;
+    }
+    cout << 0.5*ret/count << endl;
+    glBindTexture(GL_TEXTURE_2D, auxtex);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width*displayscale, height*displayscale, GL_RED, GL_FLOAT, auxlayer);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
 void mousemove2d(int x, int y) {
     if (dragging && selectedlight >= 0) {
         Vector2f p = s.clip2world(x,height*displayscale-y,width*displayscale,height*displayscale);
         p += offset;
         s.moveLight(p[0], p[1], selectedlight);
         rerasterizeLights();
+    }
+}
+void mousemovepassive(int x, int y) {
+    if (x > width*displayscale) {
+        ;
+    } else {
+        highlightRanges(x,height*displayscale-y);
     }
 }
 
@@ -1032,8 +1123,8 @@ void draw3D() {
 }
 
 void draw() {
+    s.computeField(distancefield);
     if (shouldWritePlyFile || shouldWriteExrFile) {
-        s.computeField(distancefield);
         if (shouldWritePlyFile) {
             outputPLY(plyFilename.c_str(), distancefield, width, height, 4, displayscale==1?auxlayer:NULL);
             shouldWritePlyFile = false;
@@ -1044,7 +1135,6 @@ void draw() {
             shouldWriteExrFile = false;
         }
     } else {
-        s.computeField();
         s.computeDensity();
     }
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1104,6 +1194,7 @@ void setupWindow(int argc, char** argv, int w, int h) {
     glutKeyboardFunc(keydown);
     glutMouseFunc(click);
     glutMotionFunc(mousemove);
+    glutPassiveMotionFunc(mousemovepassive);
     openglInit();
     glClearColor(0,0,0.2,1);
 }

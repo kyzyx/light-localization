@@ -402,9 +402,7 @@ __global__ void cuCompute(
     }
 }
 
-const int NUM_ADJ = 17;
-__constant__ int adjx[NUM_ADJ] = {-2,-2,-2,-2,-2,-1, 0, 1, 2, 2, 2, 2, 2, 1, 0,-1,-2};
-__constant__ int adjy[NUM_ADJ] = {-2,-1, 0, 1, 2, 2, 2, 2, 2, 1, 0,-1,-2,-2,-2,-2,-2};
+#include "adj.gen.h"
 #define LOADDATA(a,x,y,w,h) (((x)<(w))&&((y)<(h)))?a[(y)*w+(x)]:make_float4(0,0,0,0)
 
 __global__ void cuComputeDensity(

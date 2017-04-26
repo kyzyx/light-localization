@@ -40,3 +40,7 @@ target_link_libraries(visual cudamap cudaconvolution ${CUDA_LIBRARIES} ${OPENEXR
 add_custom_command(TARGET visual POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/*.glsl
     $<TARGET_FILE_DIR:visual>)
+
+add_custom_command(TARGET visual PRE_BUILD
+    COMMAND python genadj.py 8 2
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

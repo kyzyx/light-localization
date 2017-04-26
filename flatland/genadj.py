@@ -1,4 +1,32 @@
-#version 330
+import sys
+
+dim = 3
+skip = 1
+
+if len(sys.argv) > 1:
+    dim = int(sys.argv[1])
+    if len(sys.argv) > 2:
+        skip = int(sys.argv[2])
+
+x = []
+y = []
+for i in range(-dim, dim, skip):
+    x.append(-dim)
+    y.append(i)
+for i in range(-dim, dim, skip):
+    x.append(i)
+    y.append(dim)
+for i in range(dim, -dim, -skip):
+    x.append(dim)
+    y.append(i)
+for i in range(dim, -dim, -skip):
+    x.append(i)
+    y.append(-dim)
+x.append(x[0])
+y.append(y[0])
+
+# Print out vec
+shadertext1 = """#version 330
 in vec2 st;
 out vec4 color;
 uniform sampler2D buffer;
@@ -8,28 +36,9 @@ uniform float exposure;
 uniform int threshold;
 uniform int maxidx;
 
-const int NUM_ADJ = 16;
-uniform vec2 adj[17] = vec2[17](
-    vec2(-2,-2),
-    vec2(-2,-1),
-    vec2(-2,0),
-    vec2(-2,1),
-    vec2(-2,2),
-    vec2(-1,2),
-    vec2( 0,2),
-    vec2( 1,2),
-    vec2( 2,2),
-    vec2( 2,1),
-    vec2( 2,0),
-    vec2( 2,-1),
-    vec2( 2,-2),
-    vec2( 1,-2),
-    vec2( 0,-2),
-    vec2(-1,-2),
-    vec2(-2,-2)
-);
+"""
 
-const int NUM_KELLY_COLORS = 20;
+shadertext2 = """const int NUM_KELLY_COLORS = 20;
 uniform vec4 KellyColors[NUM_KELLY_COLORS] = vec4[NUM_KELLY_COLORS](
     vec4(255, 179, 0, 255)/255,
     vec4(128, 62, 117, 255)/255,
@@ -84,3 +93,19 @@ void main() {
     int i = int(texture(aux, st).x*10);
     color = i>0?KellyColors[i-1]:vec4(v,v,v,1);
 };
+"""
+
+f = open("density.f.glsl", "w")
+f.write(shadertext1)
+f.write("const int NUM_ADJ = %d;\n"%(len(x)-1))
+f.write("uniform vec2 adj[%d] = vec2[%d](\n"%(len(x), len(x)))
+vec = ["vec2(%d,%d)"%(x[i], y[i]) for i in range(len(x))]
+f.write(",\n".join(vec))
+f.write("\n);\n")
+f.write(shadertext2)
+
+# Print out arrays
+f = open("adj.gen.h", "w")
+f.write("const int NUM_ADJ = %d;\n"%(len(x)))
+f.write("__constant__ int adjx[NUM_ADJ] = {%s};\n"%(",".join([str(i) for i in x])))
+f.write("__constant__ int adjy[NUM_ADJ] = {%s};\n"%(",".join([str(i) for i in y])))
