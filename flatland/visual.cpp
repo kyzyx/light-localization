@@ -172,7 +172,7 @@ class Scene {
         void initCuda(int w, int h) {
             cm.w = w;
             cm.h = h;
-            field = new float[4*w*h];
+            field = new float[2*w*h];
             cm.maxx = maxp[0];
             cm.maxy = maxp[1];
             cm.minx = minp[0];
@@ -914,7 +914,7 @@ void recomputeMaxima(vector<Vector3f>& maxima) {
                 }
                 if (islocalmax) {
                     Vector2f p = s.clip2world(c,r,ww,hh);
-                    maxima.push_back(Vector3f(p[0], p[1], distancefield[4*(ww*r+c)]));
+                    maxima.push_back(Vector3f(p[0], p[1], distancefield[2*(ww*r+c)]));
                 }
             }
         }
@@ -1126,11 +1126,10 @@ void draw() {
     s.computeField(distancefield);
     if (shouldWritePlyFile || shouldWriteExrFile) {
         if (shouldWritePlyFile) {
-            outputPLY(plyFilename.c_str(), distancefield, width, height, 4, displayscale==1?auxlayer:NULL);
+            outputPLY(plyFilename.c_str(), distancefield, width, height, 2, displayscale==1?auxlayer:NULL);
             shouldWritePlyFile = false;
         }
         if (shouldWriteExrFile) {
-            // FIXME
             outputEXR(exrFilename.c_str(), distancefield, width, height, 2);
             shouldWriteExrFile = false;
         }
@@ -1222,7 +1221,7 @@ void initRenderTextures() {
 void initCudaGlTextures() {
     glGenBuffers(1, &pbo);
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
-    glBufferData(GL_PIXEL_UNPACK_BUFFER, 4*width*height*sizeof(float), NULL, GL_DYNAMIC_DRAW);
+    glBufferData(GL_PIXEL_UNPACK_BUFFER, 2*width*height*sizeof(float), NULL, GL_DYNAMIC_DRAW);
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
     glGenTextures(1, &tbo_tex);
     glBindTexture(GL_TEXTURE_BUFFER, tbo_tex);
@@ -1233,7 +1232,7 @@ void initCudaGlTextures() {
     glBindTexture(GL_TEXTURE_2D, tex[0]);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, 0);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RG32F, width, height, 0, GL_RG, GL_FLOAT, 0);
     glBindTexture(GL_TEXTURE_2D, tex[1]);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -1390,7 +1389,7 @@ int main(int argc, char** argv) {
     imagedata = new unsigned char[3*ww*hh];
     medialaxis = new unsigned char[3*ww*hh];
     imagecopy = new float[3*ww*hh];
-    distancefield = new float[4*width*height];
+    distancefield = new float[2*width*height];
     auxlayer = new float[ww*hh];
     memset(auxlayer, 0, ww*hh*sizeof(float));
     glGenTextures(1, &auxtex);
