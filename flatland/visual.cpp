@@ -208,10 +208,11 @@ class Scene {
         void setCudaGLBuffer(GLuint pbo) {
             Cudamap_setGLBuffer(&cm, pbo);
         }
+
         void computeField(float* distancefield=NULL) {
             computeLighting(currintensities, true);
             Cudamap_setIntensities(&cm, currintensities.data());
-            Cudamap_computeField(&cm, distancefield?distancefield:field, 0);
+            Cudamap_computeField(&cm, distancefield?distancefield:field);
         }
         void computeDensity(float* density=NULL) {
             Cudamap_computeDensity(&cm, density?density:field, densitythreshold);
@@ -647,8 +648,9 @@ void keydown(unsigned char key, int x, int y) {
     } else if (key == '.') {
         exposure += 0.05;
     } else if (key == 'z') {
-        if (heightexposure > 0.01) heightexposure -= 0.01;
+        if (heightexposure > 0.05) heightexposure -= 0.05;
     } else if (key == 'x') {
+<<<<<<< HEAD
         heightexposure += 0.01;
     } else if (key == '1') {
         float n = s.getIntensityNoise();
@@ -672,6 +674,9 @@ void keydown(unsigned char key, int x, int y) {
         std::cout << "Set density threshold to " << (n+1) << std::endl;
     } else if (key == '`') {
         s.toggleFilter();
+=======
+        heightexposure += 0.05;
+>>>>>>> parent of 553e9ce... Add ranges to density computation
     } else if (key == 'm') {
         currprog = (currprog+1)%NUM_PROGS;
     } else if (key == ' ') {

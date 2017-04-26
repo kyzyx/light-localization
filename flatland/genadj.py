@@ -67,19 +67,13 @@ int cdist(int a, int b) {
     return d>maxidx/2?maxidx-d:d;
 }
 
-int cdist(ivec4 aa, ivec4 bb) {
-    int a = max(aa.y+aa.w, bb.y+bb.w);
-    int b = min(aa.y+aa.z, bb.y+bb.z);
-    return cdist(a,b);
-}
-
 float medialaxis(vec2 st) {
     float a = 1.f/dim.x;
     float ret = 0;
     int count = 0;
-    ivec4 prev = floatBitsToInt(texture(buffer, st+a*adj[0]));
+    int prev = floatBitsToInt(texture(buffer, st+a*adj[0]).y);
     for (int i = 0; i < NUM_ADJ; i++) {
-        ivec4 curr = floatBitsToInt(texture(buffer, st+a*adj[i+1]));
+        int curr = floatBitsToInt(texture(buffer, st+a*adj[i+1]).y);
         int d = cdist(prev, curr);
         count += d>threshold?0:1;
         ret += d>threshold?0:d;
