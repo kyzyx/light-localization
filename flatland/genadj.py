@@ -63,7 +63,7 @@ uniform vec4 KellyColors[NUM_KELLY_COLORS] = vec4[NUM_KELLY_COLORS](
 );
 
 int cdist(int a, int b) {
-    int d = abs(a-b);
+    int d = max(b-a,0);
     return d>maxidx/2?maxidx-d:d;
 }
 

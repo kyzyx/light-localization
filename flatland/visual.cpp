@@ -792,7 +792,7 @@ void click2d(int button, int state, int x, int y) {
 }
 
 int cdist(int a, int b) {
-    int d = std::abs(a-b);
+    int d = std::max(b-a,0);
     int maxidx = s.numSurfels();
     return d>maxidx/2?maxidx-d:d;
 }

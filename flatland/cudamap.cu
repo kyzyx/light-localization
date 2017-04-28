@@ -296,7 +296,7 @@ __global__ void cuComputeDensity(
         int prev = __float_as_int(data[ty+adjy[0]][tx+adjx[0]].y);
         for (int i = 1; i < NUM_ADJ; i++) {
             int curr = __float_as_int(data[ty+adjy[i]][tx+adjx[i]].y);
-            int d = abs(prev-curr);
+            int d = max(curr-prev,0);
             d = d>n/2?n-d:d;
             if (d < threshold) {
                 ret += d;
