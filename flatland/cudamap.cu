@@ -273,7 +273,7 @@ __global__ void cuComputeDensity(
         float threshold
 )
 {
-    __shared__ float2 data[32][32];
+    __shared__ float2 data[64][64];
     int tx = threadIdx.x;
     int ty = threadIdx.y;
     int x = threadIdx.x + blockDim.x*blockIdx.x;
@@ -281,16 +281,16 @@ __global__ void cuComputeDensity(
 
     // Load data
     data[ty][tx]       = LOADDATA(field,x,y,w,h);
-    data[ty+16][tx]    = LOADDATA(field,x,y+16,w,h);
-    data[ty][tx+16]    = LOADDATA(field,x+16,y,w,h);
-    data[ty+16][tx+16] = LOADDATA(field,x+16,y+16,w,h);
+    data[ty+32][tx]    = LOADDATA(field,x,y+32,w,h);
+    data[ty][tx+32]    = LOADDATA(field,x+32,y,w,h);
+    data[ty+32][tx+32] = LOADDATA(field,x+32,y+32,w,h);
     __syncthreads();
 
-    x += 8;
-    y += 8;
+    x += 16;
+    y += 16;
     if (x < w-1 && y < h-1) {
-        tx += 8;
-        ty += 8;
+        tx += 16;
+        ty += 16;
         float ret = 0;
         int count = 0;
         int prev = __float_as_int(data[ty+adjy[0]][tx+adjx[0]].y);
@@ -469,8 +469,8 @@ void Cudamap_computeDensity(Cudamap* cudamap, float* density, float threshold)
     cudaMemset(cudamap->d_tmp, 0, sizeof(float)*w*h);
     cudaMemset(cudamap->d_density, 0, sizeof(float)*w*h);
 
-    dim3 threads(16, 16, 1);
-    dim3 blocks((w+15)/16-1, (h+15)/16-1, 1);
+    dim3 threads(32, 32, 1);
+    dim3 blocks((w+31)/32-1, (h+31)/32-1, 1);
 
     cuComputeDensity<<< blocks, threads >>>(
         cudamap->d_field, cudamap->d_buffer, n, w, h, threshold
