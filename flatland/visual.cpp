@@ -1059,7 +1059,7 @@ void draw2D() {
     //glBindTexture(GL_TEXTURE_BUFFER,tbo_tex);
     //glTexBuffer(GL_TEXTURE_BUFFER,GL_R32F,pbo);
     //
-    if (currprog == PROG_SOURCEMAP || currprog == PROG_MEDIALAXIS || currprog == PROG_DENSITY) {
+    if (currprog == PROG_SOURCEMAP || currprog == PROG_MEDIALAXIS /*|| currprog == PROG_DENSITY*/) {
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     } else {
@@ -1081,7 +1081,11 @@ void draw2D() {
         glBindTexture(GL_TEXTURE_2D, rfr_tex);
     } else {
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, tex[0]);
+        if (currprog == PROG_DENSITY) {
+            glBindTexture(GL_TEXTURE_2D, tex[1]);
+        } else {
+            glBindTexture(GL_TEXTURE_2D, tex[0]);
+        }
     }
     glUseProgram(progs[currprog]);
     if (currprog == PROG_SOURCEMAP || currprog == PROG_MEDIALAXIS || currprog == PROG_DENSITY) {
@@ -1414,7 +1418,8 @@ int main(int argc, char** argv) {
     //setupProg("localmin.f.glsl",PROG_LOCALMIN);
     setupProg("sourcemap.f.glsl",PROG_SOURCEMAP);
     setupProg("medialaxis.f.glsl",PROG_MEDIALAXIS);
-    setupProg("density.f.glsl",PROG_DENSITY);
+    setupProg("tboshader.f.glsl",PROG_DENSITY);
+    //setupProg("density.f.glsl",PROG_DENSITY);
 
     ShaderProgram* prog;
     prog = new FileShaderProgram("heightmap.v.glsl", "heightmap.f.glsl");
