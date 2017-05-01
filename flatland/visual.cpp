@@ -797,7 +797,6 @@ int cdist(int a, int b) {
     return d>maxidx/2?maxidx-d:d;
 }
 
-#define __constant__ const
 #include "adj.gen.h"
 
 void highlightSurfelRange(int a, int b) {
