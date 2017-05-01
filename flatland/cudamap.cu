@@ -333,7 +333,7 @@ void Cudamap_init(Cudamap* cudamap, float* surfels, float* line_occluders, float
     float kernel[KERNEL_LENGTH];
     float tot = 0;
     for (int i = 0; i <= KERNEL_RADIUS; i++) {
-        kernel[KERNEL_RADIUS-i] = Gaussian(i, 2.5);
+        kernel[KERNEL_RADIUS-i] = Gaussian(i, 3);
         kernel[KERNEL_RADIUS+i] = kernel[KERNEL_RADIUS-i];
     }
     for (int i = 0; i < KERNEL_LENGTH; i++) {

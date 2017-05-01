@@ -78,7 +78,7 @@ string helpstring =
 
 class Scene {
     public:
-        Scene() : minp(Vector2f(0,0)), maxp(Vector2f(0,0)), ncircles(0), noisescale(0), densitythreshold(10), filter(false) {
+        Scene() : minp(Vector2f(0,0)), maxp(Vector2f(0,0)), ncircles(0), noisescale(0), densitythreshold(40), filter(false) {
             surfelIdx.push_back(0);
         }
         ~Scene() { Cudamap_free(&cm); }
@@ -91,7 +91,7 @@ class Scene {
         int getDensityThreshold() const { return densitythreshold; }
 
         // --------- Geometry Manipulation ---------
-        void addSegment(Line l, float res=0.01) {
+        void addSegment(Line l, float res=0.005) {
             extendBbox(l.p1);
             extendBbox(l.p2);
             Vector2f v = l.vec();
@@ -894,7 +894,7 @@ void recomputeMaxima(vector<Vector3f>& maxima) {
     s.computeField(distancefield);
     s.computeDensity(imagecopy);
 
-    float lowthreshold = 0.5;
+    float lowthreshold = 1.5;
     int nbrhd = 15;
     int margin = 8;
     for (int r = margin; r < hh-margin; r++) {
@@ -1025,7 +1025,7 @@ bool updateEstimates() {
         double costi = solveIntensitiesCeres(geometry, intensities, s.numSurfels(), lightparams, lightintensities, nlightparams);
         double costj = solveCeres(geometry, intensities, s.numSurfels(), lightparams, lightintensities, nlightparams);
         cout << "Cost: " << costj << "(" << costi << ")"<< endl;
-        if (costj < 0.0001) {
+        if (costj < 50.0) {
             s.setFromOptimization(lightparams, lightintensities);
             for (int i = 0; i < nlightparams; i++) {
                 cout << i << ":" <<  lightparams[2*i] << " " << lightparams[2*i+1] << " " << lightintensities[i] << endl;
@@ -1256,7 +1256,7 @@ void setupProg(const char* fshader, int n) {
     glUniform1i(glGetUniformLocation(progs[n], "aux"), 1);
     glUniform2i(glGetUniformLocation(progs[n], "dim"), width, height);
     glUniform1f(glGetUniformLocation(progs[n], "exposure"), exposure);
-    glUniform1i(glGetUniformLocation(progs[n], "threshold"), 10);
+    glUniform1i(glGetUniformLocation(progs[n], "threshold"), 40);
 }
 
 void setupFullscreenQuad() {
