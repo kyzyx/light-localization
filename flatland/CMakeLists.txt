@@ -42,5 +42,5 @@ add_custom_command(TARGET visual POST_BUILD
     $<TARGET_FILE_DIR:visual>)
 
 add_custom_command(TARGET visual PRE_BUILD
-    COMMAND python genadj.py 15 3
+    COMMAND python genadj.py 2 1
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
