@@ -19,6 +19,8 @@
 #include "trackball.h"
 
 const int EPSILON = 1e-9;
+const int STATUS_SUCCESS = 1;
+const int STATUS_CONTINUE = 0;
 
 int displayscale = 4;
 int width = 200;
@@ -639,6 +641,7 @@ bool shouldWriteExrFile = false;
 bool shouldWritePngFile = false;
 bool shouldWritePlyFile = false;
 bool stepping = false;
+int it = 0;
 vector<int> candidateLights;
 string pngFilename, plyFilename, exrFilename;
 
@@ -921,7 +924,7 @@ void recomputeMaxima(vector<Vector3f>& maxima) {
     }
 }
 
-bool updateEstimates() {
+int updateEstimates() {
     double distancethreshold = 0.08*s.sceneScale();
     double decrement = -0.03;
     vector<Vector3f> maxima;
@@ -1029,7 +1032,7 @@ bool updateEstimates() {
             for (int i = 0; i < nlightparams; i++) {
                 cout << i << ":" <<  lightparams[2*i] << " " << lightparams[2*i+1] << " " << lightintensities[i] << endl;
             }
-            return false;
+            return STATUS_SUCCESS;
         } else {
             for (int i = 0, z = 0; i < s.numLights(); i++) {
                 // If the light location hasn't changed too much, then the
@@ -1048,7 +1051,7 @@ bool updateEstimates() {
             }
         }
     }
-    return true;
+    return STATUS_CONTINUE;
 }
 
 void draw2D() {
@@ -1093,8 +1096,7 @@ void draw2D() {
     }
     glUniform1f(glGetUniformLocation(progs[currprog], "exposure"), exposure);
     glActiveTexture(GL_TEXTURE1);
-    if (shouldPrintSuccess) glBindTexture(GL_TEXTURE_2D, 0);
-    else glBindTexture(GL_TEXTURE_2D, auxtex);
+    glBindTexture(GL_TEXTURE_2D, auxtex);
     glDrawArrays(GL_TRIANGLES,0,6);
     //glBindTexture(GL_TEXTURE_BUFFER,0);
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -1151,7 +1153,7 @@ void draw() {
         outputPNG(pngFilename.c_str(), imagedata, width*displayscale, height*displayscale);
         shouldWritePngFile = false;
     }
-    if (shouldExitImmediately) {
+    if (shouldExitImmediately && !shouldPrintSuccess) {
         exit(0);
     }
     if (stepping) {
@@ -1161,20 +1163,26 @@ void draw() {
 
         s.saveLights();
         bool success = false;
-        if (!updateEstimates()) {
+        int status = updateEstimates();
+        if (status == STATUS_SUCCESS) {
             cout << "Terminating: solution found" << endl;
             stepping = false;
             success = true;
+        } else {
+            int numnonzero = 0;
+            for (int i = 0; i < candidateLights.size(); i++) {
+                if (abs(s.getLight(candidateLights[i])[2]) > 0.1) numnonzero++;
+            }
+            if (numnonzero > s.numLights()/2) {
+                cout << "Failed to converge" << endl;
+                stepping = false;
+            }
         }
         float err = s.computeError();
-        if (err < 0.05) {
-            cout << "Terminating: negative incident illumination" << endl;
-            stepping = false;
+        if (!stepping && shouldPrintSuccess) {
+            cout << "Status: " << (success?"Success ":"Failure ") << err << endl;
+            if (shouldExitImmediately) exit(0);
         }
-        /*if (err > prevErr) {
-            cout << "Terminating: rise in error " << prevErr << " to " << err <<  endl;
-            stepping = false;
-        }*/
         cout << err << endl;
         if (!stepping && !success) {
             s.restoreLights();
@@ -1183,6 +1191,7 @@ void draw() {
             prevErr = err;
         }
         rerasterizeLights();
+        it++;
     }
     glutSwapBuffers();
 }
@@ -1470,6 +1479,7 @@ int main(int argc, char** argv) {
     }
     if (options[PRINT_SUCCESS]) {
         shouldPrintSuccess = true;
+        stepping = true;
         currprog = PROG_DENSITY;
     }
     if (options[OUTPUT_IMAGEFILE]) {
