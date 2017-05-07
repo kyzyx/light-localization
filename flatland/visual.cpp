@@ -889,7 +889,7 @@ bool any(unsigned char* a, int w, int h, int x, int y, int d = 1) {
     return false;
 }
 
-void recomputeMaxima(vector<Vector3f>& maxima) {
+void recomputeMaxima(vector<Vector3f>& maxima, float lowthreshold = 0.3) {
     maxima.clear();
     int ww = width;
     int hh = height;
@@ -897,7 +897,6 @@ void recomputeMaxima(vector<Vector3f>& maxima) {
     s.computeField(distancefield);
     s.computeDensity(imagecopy);
 
-    float lowthreshold = 0.5;
     int nbrhd = 15;
     int margin = 8;
     for (int r = margin; r < hh-margin; r++) {
