@@ -832,7 +832,7 @@ void highlightRanges(int x, int y) {
         idx = yy*width+xx;
         int curr = __float_as_int(distancefield[2*idx+1]);
         int d = cdist(prev, curr);
-            cout << d << " ";
+            //cout << d << " ";
         if (d < s.getDensityThreshold()) {
             ret+=d;
             count++;
@@ -847,7 +847,7 @@ void highlightRanges(int x, int y) {
         }
         prev = curr;
     }
-    cout << 0.5*ret/count << endl;
+    //cout << 0.5*ret/count << endl;
     glBindTexture(GL_TEXTURE_2D, auxtex);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width*displayscale, height*displayscale, GL_RED, GL_FLOAT, auxlayer);
     glBindTexture(GL_TEXTURE_2D, 0);
