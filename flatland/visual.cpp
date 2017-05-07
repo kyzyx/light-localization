@@ -81,7 +81,7 @@ string helpstring =
 
 class Scene {
     public:
-        Scene() : minp(Vector2f(0,0)), maxp(Vector2f(0,0)), ncircles(0), noisescale(0), densitythreshold(10), filter(false) {
+        Scene() : minp(Vector2f(0,0)), maxp(Vector2f(0,0)), ncircles(0), noisescale(0), densitythreshold(40), filter(false) {
             surfelIdx.push_back(0);
         }
         ~Scene() { Cudamap_free(&cm); }
@@ -889,7 +889,7 @@ bool any(unsigned char* a, int w, int h, int x, int y, int d = 1) {
     return false;
 }
 
-void recomputeMaxima(vector<Vector3f>& maxima, float lowthreshold = 0.3) {
+void recomputeMaxima(vector<Vector3f>& maxima, float lowthreshold = 1.2) {
     maxima.clear();
     int ww = width;
     int hh = height;
@@ -1032,7 +1032,7 @@ int updateEstimates() {
             cout << i << ":" <<  lightparams[2*i] << " " << lightparams[2*i+1] << " " << lightintensities[i] << endl;
         }
             cout << "----------------" << endl;
-        if (costj < 0.0001) {
+        if (costj < 40.0) {
             s.setFromOptimization(lightparams, lightintensities);
             return STATUS_SUCCESS;
         } else {
@@ -1275,7 +1275,7 @@ void setupProg(const char* fshader, int n) {
     glUniform1i(glGetUniformLocation(progs[n], "aux"), 1);
     glUniform2i(glGetUniformLocation(progs[n], "dim"), width, height);
     glUniform1f(glGetUniformLocation(progs[n], "exposure"), exposure);
-    glUniform1i(glGetUniformLocation(progs[n], "threshold"), 10);
+    glUniform1i(glGetUniformLocation(progs[n], "threshold"), 40);
 }
 
 void setupFullscreenQuad() {
