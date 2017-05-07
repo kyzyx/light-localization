@@ -21,6 +21,7 @@
 const int EPSILON = 1e-9;
 const int STATUS_SUCCESS = 1;
 const int STATUS_CONTINUE = 0;
+const int STATUS_NO_PEAKS = -1;
 
 int displayscale = 4;
 int width = 200;
@@ -931,6 +932,7 @@ int updateEstimates() {
     vector<int> candidate2maximum(candidateLights.size(), -1);
 
     recomputeMaxima(maxima);
+    if (maxima.size() == 0) return STATUS_NO_PEAKS;
     bool lightadded = false;
 
     // Associate maxima with existing lights, adding new lights if necessary
@@ -1027,11 +1029,12 @@ int updateEstimates() {
         double costi = solveIntensitiesCeres(geometry, intensities, s.numSurfels(), lightparams, lightintensities, nlightparams);
         double costj = solveCeres(geometry, intensities, s.numSurfels(), lightparams, lightintensities, nlightparams);
         cout << "Cost: " << costj << "(" << costi << ")"<< endl;
+        for (int i = 0; i < nlightparams; i++) {
+            cout << i << ":" <<  lightparams[2*i] << " " << lightparams[2*i+1] << " " << lightintensities[i] << endl;
+        }
+            cout << "----------------" << endl;
         if (costj < 0.0001) {
             s.setFromOptimization(lightparams, lightintensities);
-            for (int i = 0; i < nlightparams; i++) {
-                cout << i << ":" <<  lightparams[2*i] << " " << lightparams[2*i+1] << " " << lightintensities[i] << endl;
-            }
             return STATUS_SUCCESS;
         } else {
             for (int i = 0, z = 0; i < s.numLights(); i++) {
@@ -1159,7 +1162,6 @@ void draw() {
     if (stepping) {
         int ww = width;
         int hh = height;
-        memset(imagecopy, 0, 3*ww*hh*sizeof(float));
 
         s.saveLights();
         bool success = false;
@@ -1168,17 +1170,27 @@ void draw() {
             cout << "Terminating: solution found" << endl;
             stepping = false;
             success = true;
+        } else if (status == STATUS_NO_PEAKS) {
+            cout << "Terminating: no peaks found" << endl;
+            stepping = false;
         } else {
             int numnonzero = 0;
+            int numreal = 0;
+            for (int i = 0; i < s.numLights(); i++) {
+                if (s.getLight(i)[2] > 0) numreal++;
+            }
             for (int i = 0; i < candidateLights.size(); i++) {
                 if (abs(s.getLight(candidateLights[i])[2]) > 0.1) numnonzero++;
             }
-            if (numnonzero > s.numLights()/2) {
-                cout << "Failed to converge" << endl;
+            if (numnonzero > 2*numreal) {
+                cout << "Terminating: Failed to converge" << endl;
                 stepping = false;
             }
         }
         float err = s.computeError();
+        if (err < 0) {
+            stepping = false;
+        }
         if (!stepping && shouldPrintSuccess) {
             cout << "Status: " << (success?"Success ":"Failure ") << err << endl;
             if (shouldExitImmediately) exit(0);

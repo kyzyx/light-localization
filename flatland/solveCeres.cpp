@@ -56,6 +56,12 @@ CostFunction* Create(double* g, double* i, int numlights) {
         return new AutoDiffCostFunction<CostFunctor, 1, 7*DIM, 7>(new CostFunctor(g, *i, numlights));
     } else if (numlights == 8) {
         return new AutoDiffCostFunction<CostFunctor, 1, 8*DIM, 8>(new CostFunctor(g, *i, numlights));
+    } else if (numlights == 9) {
+        return new AutoDiffCostFunction<CostFunctor, 1, 9*DIM, 9>(new CostFunctor(g, *i, numlights));
+    } else if (numlights == 10) {
+        return new AutoDiffCostFunction<CostFunctor, 1, 10*DIM, 10>(new CostFunctor(g, *i, numlights));
+    } else {
+        cerr << "Error: unhandled number of lights " << numlights << endl;
     }
 }
 
@@ -76,6 +82,7 @@ double solveIntensitiesCeres(
     }
     Solver::Options options;
     options.linear_solver_type = DENSE_QR;
+    options.logging_type = SILENT;
     Solver::Summary summary;
     Solve(options, &problem, &summary);
     return summary.final_cost;
@@ -101,6 +108,7 @@ double solveCeres(
     }
     Solver::Options options;
     options.linear_solver_type = DENSE_QR;
+    options.logging_type = SILENT;
     Solver::Summary summary;
     Solve(options, &problem, &summary);
     return summary.final_cost;
