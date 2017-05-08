@@ -897,8 +897,8 @@ void recomputeMaxima(vector<Vector3f>& maxima, float lowthreshold = 1.2) {
     s.computeField(distancefield);
     s.computeDensity(imagecopy);
 
-    int nbrhd = 15;
-    int margin = 8;
+    int nbrhd = 11;
+    int margin = 11;
     for (int r = margin; r < hh-margin; r++) {
         for (int c = margin; c < ww-margin; c++) {
             float fv = imagecopy[r*ww+c];
@@ -907,8 +907,9 @@ void recomputeMaxima(vector<Vector3f>& maxima, float lowthreshold = 1.2) {
                 for (int i = -nbrhd; i <= nbrhd; i++) {
                     for (int j = -nbrhd; j <= nbrhd; j++) {
                         if (i == 0 && j == 0) continue;
+                        if (r+i < margin || c+j < margin || r+i >= hh-margin || c+j >= ww-margin) continue;
                         float v = imagecopy[(r+i)*ww+c+j];
-                        if (v >= fv) {
+                        if (v > fv) {
                             islocalmax = false;
                             break;
                         }
