@@ -19,15 +19,14 @@ struct CostFunctor {
         bool operator()(const T* const l, const T* const intensities, T* residual) const {
             residual[0] = T(intensity);
             for (int i = 0; i < nl; i++) {
-                T LdotL = ceres::sqrt((l[DIM*i+0] - T(p[0]))*(l[DIM*i+0] - T(p[0]))
-                        + (l[DIM*i+1] - T(p[1]))*(l[DIM*i+1] - T(p[1])));
-                T ndotLn = T(n[0])*(l[DIM*i+0] - T(p[0]))
-                         + T(n[1])*(l[DIM*i+1] - T(p[1]));
-                /*for (int j = 0; j < DIM; j++) {
-                    T L = l[i+j] - T(p[j]);
+                T LdotL = T(0);
+                T ndotLn = T(0);
+                for (int j = 0; j < DIM; j++) {
+                    T L = l[DIM*i+j] - T(p[j]);
                     ndotLn += T(n[j])*L;
                     LdotL += L*L;
-                }*/
+                }
+                LdotL = ceres::sqrt(LdotL);
                 residual[0] -= intensities[i]*ndotLn/(LdotL*LdotL*LdotL);
             }
             return true;
