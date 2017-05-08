@@ -159,9 +159,15 @@ int main(int argc, char** argv) {
     int success = 0;
     int num_trials = 500;
     google::InitGoogleLogging("solveCeres()");
+    memcpy(geometry, s.surfels.data(), sizeof(double)*s.surfels.size());
+    memcpy(intensities, s.intensities.data(), sizeof(double)*s.intensities.size());
     for (int i = 0; i < num_trials; i++) {
-        memcpy(geometry, s.surfels.data(), sizeof(double)*s.surfels.size());
-        memcpy(intensities, s.intensities.data(), sizeof(double)*s.intensities.size());
+        for (int j = 0; j < s.lights.size(); j++) {
+            lightparams[2*j+0] = randf();
+            lightparams[2*j+1] = randf();
+            lightintensities[j] = 1;
+        }
+
         double costi = solveIntensitiesCeres(geometry, intensities, s.intensities.size(),
                 lightparams, lightintensities, s.lights.size());
         double costj = solveCeres(geometry, intensities, s.intensities.size(),
@@ -175,5 +181,5 @@ int main(int argc, char** argv) {
         cout << " }" << endl;*/
         if (costj < 1) success++;
     }
-    cout << success / (float) num_trials << endl;
+    cout << "Real success rate: " <<  success / (float) num_trials << endl;
 }
