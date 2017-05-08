@@ -1,7 +1,7 @@
 #include "solveCeres.h"
 #include <ceres/ceres.h>
 #include <iostream>
-#define DIM 2
+#define DIM 3
 
 using namespace ceres;
 using namespace std;

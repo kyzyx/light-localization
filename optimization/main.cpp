@@ -114,64 +114,153 @@ class Scene {
 
 Scene s;
 
+void readPly(const char* filename,
+        std::vector<float>& verts,
+        std::vector<float>& norms,
+        std::vector<unsigned int>& faces,
+        std::vector<float>& colors,
+        std::vector<float>& lights
+        )
+{
+    ifstream in(filename);
+    int nfaces, nvertices;
+    int nlights = 0;
+    bool hasnormals = true;
+    bool hascolors = false;
+    // Parse Header
+    string line;
+    string s;
+    getline(in, line);
+    if (line == "ply") {
+        getline(in, line);
+        string element;
+        while (line != "end_header") {
+            stringstream sin(line);
+            sin >> s;
+            if (s == "element") {
+                sin >> s;
+                if (s == "vertex") {
+                    element = "vertex";
+                    sin >> nvertices;
+                } else if (s == "face") {
+                    element = "face";
+                    sin >> nfaces;
+                } else if (s == "light") {
+                    element = "light";
+                    sin >> nlights;
+                }
+            } else if (s == "property" && element == "vertex") {
+                sin >> s; // Data type
+                sin >> s; // name
+                if (s == "red") {
+                    hascolors = true;
+                }
+            }
+            getline(in, line);
+        }
+    } else {
+        cerr << "Error parsing PLY header" << endl;
+    }
+    for (int i = 0; i < nvertices; i++) {
+        float x, y, z;
+        in >> x >> y >> z;
+        verts.push_back(x);
+        verts.push_back(y);
+        verts.push_back(z);
+        if (hasnormals) {
+            in >> x >> y >> z;
+            norms.push_back(x);
+            norms.push_back(y);
+            norms.push_back(z);
+        }
+        if (hascolors) {
+            in >> x >> y >> z;
+            colors.push_back(x);
+            colors.push_back(y);
+            colors.push_back(z);
+        }
+    }
+    for (int i = 0; i < nfaces; i++) {
+        float a, b, c, d;
+        in >> a >> b >> c >> d;
+        faces.push_back(b);
+        faces.push_back(c);
+        faces.push_back(d);
+    }
+    for (int i = 0; i < nlights; i++) {
+        float a, b, c, d;
+        in >> a >> b >> c >> d;
+        lights.push_back(a);
+        lights.push_back(b);
+        lights.push_back(c);
+        lights.push_back(d);
+    }
+}
 
 int main(int argc, char** argv) {
     double* lightparams;
     double* lightintensities;
     double* geometry;
     double* intensities;
+    std::vector<float> verts;
+    std::vector<float> norms;
+    std::vector<unsigned int> faces;
+    std::vector<float> colors;
+    std::vector<float> lights;
     if (argc > 1) {
-        ifstream in(argv[1]);
-        int nsegs, nlights, type;
-        double x, y, z;
-        in >> nsegs >> nlights;
-        for (int i = 0; i < nsegs; i++) {
-            type = 0;
-            //in >> type;
-            if (type == 0) {
-                in >> x >> y;
-                Vector2f v1(x,y);
-                in >> x >> y;
-                Vector2f v2(x,y);
-                s.addSegment(Line(v1,v2));
-            } else {
-                in >> x >> y >> z;
-                s.addCircle(Vector2f(x,y),z);
+        readPly(argv[1], verts, norms, faces, colors, lights);
+    } else {
+        cout << "Usage: optimization filename.ply" << endl;
+        exit(0);
+    }
+    int DIM = 3;
+    int nl = lights.size()/(DIM+1);
+    int nv = verts.size()/DIM;
+    lightparams = new double[nl*DIM];
+    lightintensities = new double[nl];
+    geometry = new double[2*verts.size()];
+    intensities = new double[nv];
+    int z = 0;
+    for (int i = 0; i < verts.size(); i+=DIM) {
+        for (int j = 0; j < DIM; j++) geometry[z++] = verts[i+j];
+        for (int j = 0; j < DIM; j++) geometry[z++] = norms[i+j];
+    }
+    if (colors.empty()) {
+        colors.resize(verts.size(),0);
+        for (int i = 0; i < verts.size(); i+=3) {
+            for (int j = 0; j < lights.size(); j+=4) {
+                float LdotL = 0;
+                float ndotLn = 0;
+                for (int k = 0; k < 3; k++) {
+                    float L = lights[j+k]-verts[i+k];
+                    ndotLn += norms[i+k]*L;
+                    LdotL += L*L;
+                }
+                ndotLn /= sqrt(LdotL);
+                float color = ndotLn>0?lights[j+3]*ndotLn/LdotL:0;
+                for (int k = 0; k < 3; k++) colors[i+k] += color;
             }
         }
-        for (int i = 0; i < nlights; i++) {
-            in >> x >> y >> z;
-            s.addLight(x, y, z);
-        }
-        lightparams = new double[s.lights.size()*2];
-        lightintensities = new double[s.lights.size()];
-        s.computeLighting();
-    } else {
-        s.addCircle(Vector2f(0,0), 1.0f, 0.007f);
-        s.addLight(0,0);
-        s.computeLighting();
-        lightparams = new double[s.lights.size()*2];
-        lightintensities = new double[s.lights.size()];
     }
-    geometry = new double[s.surfels.size()];
-    intensities = new double[s.intensities.size()];
+    for (int i = 0; i < colors.size(); i+=DIM) {
+        intensities[i/DIM] = colors[i];
+    }
     generator.seed(time(0));
     int success = 0;
-    int num_trials = 500;
+    int num_trials = 50;
     google::InitGoogleLogging("solveCeres()");
-    memcpy(geometry, s.surfels.data(), sizeof(double)*s.surfels.size());
-    memcpy(intensities, s.intensities.data(), sizeof(double)*s.intensities.size());
     for (int i = 0; i < num_trials; i++) {
-        for (int j = 0; j < s.lights.size(); j++) {
-            lightparams[2*j+0] = randf();
-            lightparams[2*j+1] = randf();
+        for (int j = 0; j < nl; j++) {
+            for (int k = 0; k < DIM; k++) {
+                lightparams[DIM*j+k] = randf();
+            }
             lightintensities[j] = 1;
         }
 
-        double costi = solveIntensitiesCeres(geometry, intensities, s.intensities.size(),
-                lightparams, lightintensities, s.lights.size());
-        double costj = solveCeres(geometry, intensities, s.intensities.size(),
-                lightparams, lightintensities, s.lights.size());
+        double costi = solveIntensitiesCeres(geometry, intensities, nv,
+                lightparams, lightintensities, nl);
+        double costj = solveCeres(geometry, intensities, nv,
+                lightparams, lightintensities, nl);
         //cout << "Run " << i+1 << " " ;
         /*cout << costj << " " << costi << " { ";
         for (int j = 0; j < s.lights.size(); j++) {
